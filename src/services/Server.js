@@ -72,7 +72,13 @@ const readSettings = () => {
         require_nolog: true,
         require_nofilter: false,
         disabled_server_names: [],
-        fallback_resolvers: ['9.9.9.9:53', '8.8.8.8:53'],
+        fallback_resolvers: [
+          'cloudflare',
+          'google',
+          'quad9-dnscrypt-ip4-filter-pri',
+          'adguard-dns',
+          'mullvad-default-doh'
+        ],
         ignore_system_dns: false,
         netprobe_timeout: 60,
         log_level: 'info',
@@ -85,7 +91,32 @@ const readSettings = () => {
         forwarding_rules: '',
         cloaking_rules: '',
         blacklist: '',
-        whitelist: ''
+        whitelist: '',
+        server_names: [
+          'cloudflare',
+          'cloudflare-ipv6',
+          'cloudflare-security',
+          'cloudflare-family',
+          'google',
+          'google-ipv6',
+          'quad9-dnscrypt-ip4-filter-alt',
+          'quad9-dnscrypt-ip4-filter-pri',
+          'quad9-dnscrypt-ip4-nofilter-alt',
+          'quad9-dnscrypt-ip4-nofilter-pri',
+          'adguard-dns',
+          'adguard-dns-ipv6',
+          'adguard-dns-family',
+          'adguard-dns-family-ipv6',
+          'mullvad-adblock-doh',
+          'mullvad-adblock-doh-ipv6',
+          'mullvad-default-doh',
+          'mullvad-default-doh-ipv6',
+          'nextdns',
+          'nextdns-ipv6'
+        ],
+        lb_strategy: 'p2',
+        lb_estimator: true,
+        lb_estimator_interval: 300
       };
     }
 
@@ -215,6 +246,44 @@ app.post('/api/settings', (req, res) => {
   }
 });
 
+// Resolver endpoints
+app.get('/api/resolvers', (req, res) => {
+  try {
+    const settings = readSettings();
+    const resolvers = {
+      server_names: settings.server_names || [],
+      disabled_server_names: settings.disabled_server_names || [],
+      lb_strategy: settings.lb_strategy || 'p2',
+      lb_estimator: settings.lb_estimator || true,
+      lb_estimator_interval: settings.lb_estimator_interval || 300
+    };
+    return res.json(resolvers);
+  } catch (error) {
+    console.error('Error reading resolvers:', error);
+    return res.status(500).json({ error: 'Failed to read resolvers' });
+  }
+});
+
+app.post('/api/resolvers', (req, res) => {
+  try {
+    const settings = readSettings();
+    const { server_names, disabled_server_names, lb_strategy, lb_estimator, lb_estimator_interval } = req.body;
+    
+    // Update resolver settings
+    settings.server_names = server_names;
+    settings.disabled_server_names = disabled_server_names;
+    settings.lb_strategy = lb_strategy;
+    settings.lb_estimator = lb_estimator;
+    settings.lb_estimator_interval = lb_estimator_interval;
+    
+    saveSettings(settings);
+    return res.json({ message: 'Resolver settings saved successfully' });
+  } catch (error) {
+    console.error('Error saving resolvers:', error);
+    return res.status(500).json({ error: 'Failed to save resolvers' });
+  }
+});
+
 // Start server
 const PORT = 3000;
 app.listen(PORT, () => {
@@ -224,6 +293,8 @@ app.listen(PORT, () => {
   console.log('  DELETE /api/logs');
   console.log('  GET    /api/settings');
   console.log('  POST   /api/settings');
+  console.log('  GET    /api/resolvers');
+  console.log('  POST   /api/resolvers');
   console.log(`Reading logs from: ${LOG_FILE_PATH}`);
   console.log(`Reading config from: ${CONFIG_FILE_PATH}`);
 });

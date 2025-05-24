@@ -4,6 +4,8 @@ import Dashboard from './components/Dashboard'
 import Resolvers from './components/Resolvers'
 import Logs from './components/Logs'
 import Settings from './components/Settings'
+import About from './components/About'
+import Blocklists from './components/Blocklists'
 
 function App() {
   return (
@@ -14,10 +16,10 @@ function App() {
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/resolvers" element={<Resolvers />} />
-            <Route path="/blocklists" element={<div className="space-y-6"><h1 className="text-3xl font-semibold">Blocklists</h1><p className="mt-4 bg-white p-6 rounded-xl shadow-lg">Content for Blocklists section...</p></div>} />
+            <Route path="/blocklists" element={<Blocklists />} />
             <Route path="/logs" element={<Logs />} />
             <Route path="/settings" element={<Settings />} />
-            <Route path="/about" element={<div className="space-y-6"><h1 className="text-3xl font-semibold">About</h1><p className="mt-4 bg-white p-6 rounded-xl shadow-lg">Content for About section...</p></div>} />
+            <Route path="/about" element={<About />} />
           </Routes>
         </main>
       </div>

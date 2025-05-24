@@ -49,4 +49,24 @@ export const saveSettings = async (settings) => {
     console.error('Error saving settings:', error);
     throw error;
   }
+};
+
+export const fetchResolvers = async () => {
+  try {
+    const response = await api.get('/resolvers');
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching resolvers:', error);
+    throw error;
+  }
+};
+
+export const saveResolvers = async (resolvers) => {
+  try {
+    const response = await api.post('/resolvers', resolvers);
+    return response.data;
+  } catch (error) {
+    console.error('Error saving resolvers:', error);
+    throw error;
+  }
 }; 

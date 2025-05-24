@@ -1,148 +1,325 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { fetchResolvers, saveResolvers } from '../services/api';
+import {
+  Box,
+  Card,
+  CardContent,
+  Typography,
+  TextField,
+  Button,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
+  Switch,
+  FormControlLabel,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
+  IconButton,
+  Snackbar,
+  Alert,
+  CircularProgress,
+  Grid,
+} from '@mui/material';
+import {
+  Star as StarIcon,
+  StarBorder as StarBorderIcon,
+  Link as LinkIcon,
+  Refresh as RefreshIcon,
+} from '@mui/icons-material';
 
 const Resolvers = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [protocolFilter, setProtocolFilter] = useState('all');
   const [locationFilter, setLocationFilter] = useState('any');
   const [noLogsFilter, setNoLogsFilter] = useState(false);
+  const [resolvers, setResolvers] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
 
-  const resolvers = [
-    {
-      name: 'Cloudflare DNS',
-      protocol: 'DoH',
-      location: 'USA',
-      noLogs: true,
-      dnssec: true,
-      latency: '15 ms',
-      isFavorite: false,
-    },
-    {
-      name: 'Quad9 (Filtered)',
-      protocol: 'DNSCrypt',
-      location: 'Switzerland',
-      noLogs: true,
-      dnssec: true,
-      latency: '30 ms',
-      isFavorite: false,
-    },
-    {
-      name: 'AdGuard DNS',
-      protocol: 'DoH',
-      location: 'Cyprus',
-      noLogs: false,
-      dnssec: true,
-      latency: '45 ms',
-      isFavorite: true,
-    },
-  ];
+  useEffect(() => {
+    loadResolvers();
+  }, []);
+
+  const loadResolvers = async () => {
+    try {
+      setLoading(true);
+      const data = await fetchResolvers();
+      const resolverList = data.server_names.map(name => {
+        const isDoH = name.includes('doh');
+        const isIPv6 = name.includes('ipv6');
+        const isFamily = name.includes('family');
+        const isAdblock = name.includes('adblock');
+        
+        let provider = 'Unknown';
+        if (name.includes('cloudflare')) provider = 'Cloudflare';
+        else if (name.includes('google')) provider = 'Google';
+        else if (name.includes('quad9')) provider = 'Quad9';
+        else if (name.includes('adguard')) provider = 'AdGuard';
+        else if (name.includes('mullvad')) provider = 'Mullvad';
+        else if (name.includes('nextdns')) provider = 'NextDNS';
+
+        return {
+          name,
+          provider,
+          protocol: isDoH ? 'DoH' : 'DNSCrypt',
+          location: isIPv6 ? 'IPv6' : 'IPv4',
+          noLogs: !name.includes('nofilter'),
+          dnssec: true,
+          family: isFamily,
+          adblock: isAdblock,
+          latency: '0 ms',
+          isFavorite: false,
+        };
+      });
+      setResolvers(resolverList);
+      setError('');
+    } catch (err) {
+      setError('Failed to load resolvers');
+      console.error('Error loading resolvers:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSave = async () => {
+    try {
+      setLoading(true);
+      await saveResolvers({
+        server_names: resolvers.map(r => r.name),
+        disabled_server_names: [],
+        lb_strategy: 'p2',
+        lb_estimator: true,
+        lb_estimator_interval: 300
+      });
+      setSuccess('Resolvers saved successfully');
+      setError('');
+    } catch (err) {
+      setError('Failed to save resolvers');
+      console.error('Error saving resolvers:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleToggleFavorite = (index) => {
+    const newResolvers = [...resolvers];
+    newResolvers[index].isFavorite = !newResolvers[index].isFavorite;
+    setResolvers(newResolvers);
+  };
+
+  const filteredResolvers = resolvers.filter(resolver => {
+    const matchesSearch = resolver.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         resolver.provider.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesProtocol = protocolFilter === 'all' || resolver.protocol === protocolFilter;
+    const matchesLocation = locationFilter === 'any' || resolver.location === locationFilter;
+    const matchesNoLogs = !noLogsFilter || resolver.noLogs;
+    return matchesSearch && matchesProtocol && matchesLocation && matchesNoLogs;
+  });
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-3xl font-semibold text-gray-700">Manage Resolvers</h1>
+    <Box sx={{ p: 3 }}>
+      <Card>
+        <CardContent>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
+            <Typography variant="h5" component="h2">
+              Manage Resolvers
+            </Typography>
+            <Box>
+              <Button
+                startIcon={<RefreshIcon />}
+                onClick={loadResolvers}
+                disabled={loading}
+                sx={{ mr: 1 }}
+              >
+                Refresh
+              </Button>
+              <Button
+                variant="contained"
+                onClick={handleSave}
+                disabled={loading}
+              >
+                Save Changes
+              </Button>
+            </Box>
+          </Box>
 
-      <div className="bg-white p-6 rounded-xl shadow-lg">
-        <h2 className="text-xl font-semibold mb-4 text-gray-600">Active Resolver</h2>
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-lg font-medium">Cloudflare DNS (DoH)</p>
-            <p className="text-sm text-gray-500">1.1.1.1 / doh.cloudflare-dns.com</p>
-          </div>
-          <span className="px-3 py-1 text-xs font-semibold text-green-700 bg-green-200 rounded-full">
-            Connected
-          </span>
-        </div>
-      </div>
+          <Snackbar open={!!error} autoHideDuration={6000} onClose={() => setError('')}>
+            <Alert severity="error" onClose={() => setError('')}>
+              {error}
+            </Alert>
+          </Snackbar>
 
-      <div className="bg-white p-6 rounded-xl shadow-lg">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-          <input
-            type="text"
-            placeholder="Search resolvers..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-transparent outline-none transition-shadow"
-          />
-          <select
-            value={protocolFilter}
-            onChange={(e) => setProtocolFilter(e.target.value)}
-            className="p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-transparent outline-none transition-shadow"
-          >
-            <option value="all">All Protocols</option>
-            <option value="DNSCrypt">DNSCrypt</option>
-            <option value="DoH">DoH</option>
-            <option value="DoH3">DoH3</option>
-          </select>
-          <select
-            value={locationFilter}
-            onChange={(e) => setLocationFilter(e.target.value)}
-            className="p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-transparent outline-none transition-shadow"
-          >
-            <option value="any">Any Location</option>
-            <option value="USA">USA</option>
-            <option value="Germany">Germany</option>
-            <option value="Japan">Japan</option>
-          </select>
-          <label className="flex items-center space-x-2 p-3 border border-gray-300 rounded-lg">
-            <input
-              type="checkbox"
-              checked={noLogsFilter}
-              onChange={(e) => setNoLogsFilter(e.target.checked)}
-              className="form-checkbox h-5 w-5 text-sky-600 rounded focus:ring-sky-500"
-            />
-            <span>No Logs</span>
-          </label>
-        </div>
-        <button className="bg-sky-500 hover:bg-sky-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition-colors duration-150">
-          <i className="fas fa-plus mr-2"></i>Add Custom Resolver
-        </button>
-      </div>
+          <Snackbar open={!!success} autoHideDuration={6000} onClose={() => setSuccess('')}>
+            <Alert severity="success" onClose={() => setSuccess('')}>
+              {success}
+            </Alert>
+          </Snackbar>
 
-      <div className="bg-white rounded-xl shadow-lg overflow-x-auto">
-        <table className="w-full text-left">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="p-4 font-semibold text-gray-600">Name</th>
-              <th className="p-4 font-semibold text-gray-600">Protocol</th>
-              <th className="p-4 font-semibold text-gray-600">Location</th>
-              <th className="p-4 font-semibold text-gray-600">No Logs</th>
-              <th className="p-4 font-semibold text-gray-600">DNSSEC</th>
-              <th className="p-4 font-semibold text-gray-600">Latency</th>
-              <th className="p-4 font-semibold text-gray-600">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-200">
-            {resolvers.map((resolver, index) => (
-              <tr key={index} className="hover:bg-gray-50 transition-colors duration-100">
-                <td className="p-4">{resolver.name}</td>
-                <td className="p-4">
-                  <span className="px-2 py-1 text-xs font-semibold text-blue-700 bg-blue-100 rounded-full">
-                    {resolver.protocol}
-                  </span>
-                </td>
-                <td className="p-4">{resolver.location}</td>
-                <td className="p-4">
-                  <i className={`fas fa-${resolver.noLogs ? 'check' : 'times'}-circle ${
-                    resolver.noLogs ? 'text-green-500' : 'text-red-500'
-                  }`}></i>
-                </td>
-                <td className="p-4">
-                  <i className="fas fa-check-circle text-green-500"></i>
-                </td>
-                <td className="p-4">{resolver.latency}</td>
-                <td className="p-4">
-                  <button className="text-sky-600 hover:text-sky-800 font-medium" title="Connect">
-                    <i className="fas fa-plug"></i>
-                  </button>
-                  <button className="text-yellow-500 hover:text-yellow-700 ml-2" title="Favorite">
-                    <i className={`${resolver.isFavorite ? 'fas' : 'far'} fa-star`}></i>
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
+          <Box sx={{ mb: 3 }}>
+            <Grid container spacing={2}>
+              <Grid item xs={12} md={3}>
+                <TextField
+                  fullWidth
+                  label="Search resolvers"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search by name or provider..."
+                />
+              </Grid>
+              <Grid item xs={12} md={3}>
+                <FormControl fullWidth>
+                  <InputLabel>Protocol</InputLabel>
+                  <Select
+                    value={protocolFilter}
+                    onChange={(e) => setProtocolFilter(e.target.value)}
+                    label="Protocol"
+                  >
+                    <MenuItem value="all">All Protocols</MenuItem>
+                    <MenuItem value="DNSCrypt">DNSCrypt</MenuItem>
+                    <MenuItem value="DoH">DoH</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} md={3}>
+                <FormControl fullWidth>
+                  <InputLabel>Location</InputLabel>
+                  <Select
+                    value={locationFilter}
+                    onChange={(e) => setLocationFilter(e.target.value)}
+                    label="Location"
+                  >
+                    <MenuItem value="any">Any Location</MenuItem>
+                    <MenuItem value="IPv4">IPv4</MenuItem>
+                    <MenuItem value="IPv6">IPv6</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} md={3}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={noLogsFilter}
+                      onChange={(e) => setNoLogsFilter(e.target.checked)}
+                    />
+                  }
+                  label="No Logs Only"
+                />
+              </Grid>
+            </Grid>
+          </Box>
+
+          {loading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+              <CircularProgress />
+            </Box>
+          ) : (
+            <TableContainer component={Paper}>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Provider</TableCell>
+                    <TableCell>Name</TableCell>
+                    <TableCell>Protocol</TableCell>
+                    <TableCell>Location</TableCell>
+                    <TableCell>Features</TableCell>
+                    <TableCell>Latency</TableCell>
+                    <TableCell>Actions</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {filteredResolvers.map((resolver, index) => (
+                    <TableRow key={index}>
+                      <TableCell>{resolver.provider}</TableCell>
+                      <TableCell>{resolver.name}</TableCell>
+                      <TableCell>
+                        <Box
+                          sx={{
+                            px: 1,
+                            py: 0.5,
+                            borderRadius: 1,
+                            bgcolor: 'primary.light',
+                            color: 'primary.contrastText',
+                            display: 'inline-block',
+                          }}
+                        >
+                          {resolver.protocol}
+                        </Box>
+                      </TableCell>
+                      <TableCell>{resolver.location}</TableCell>
+                      <TableCell>
+                        <Box sx={{ display: 'flex', gap: 1 }}>
+                          {resolver.noLogs && (
+                            <Box
+                              sx={{
+                                px: 1,
+                                py: 0.5,
+                                borderRadius: 1,
+                                bgcolor: 'success.light',
+                                color: 'success.contrastText',
+                                fontSize: '0.75rem',
+                              }}
+                            >
+                              No Logs
+                            </Box>
+                          )}
+                          {resolver.family && (
+                            <Box
+                              sx={{
+                                px: 1,
+                                py: 0.5,
+                                borderRadius: 1,
+                                bgcolor: 'info.light',
+                                color: 'info.contrastText',
+                                fontSize: '0.75rem',
+                              }}
+                            >
+                              Family
+                            </Box>
+                          )}
+                          {resolver.adblock && (
+                            <Box
+                              sx={{
+                                px: 1,
+                                py: 0.5,
+                                borderRadius: 1,
+                                bgcolor: 'warning.light',
+                                color: 'warning.contrastText',
+                                fontSize: '0.75rem',
+                              }}
+                            >
+                              Adblock
+                            </Box>
+                          )}
+                        </Box>
+                      </TableCell>
+                      <TableCell>{resolver.latency}</TableCell>
+                      <TableCell>
+                        <IconButton
+                          onClick={() => handleToggleFavorite(index)}
+                          color={resolver.isFavorite ? 'warning' : 'default'}
+                        >
+                          {resolver.isFavorite ? <StarIcon /> : <StarBorderIcon />}
+                        </IconButton>
+                        <IconButton color="primary">
+                          <LinkIcon />
+                        </IconButton>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+        </CardContent>
+      </Card>
+    </Box>
   );
 };
 

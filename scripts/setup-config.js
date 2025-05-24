@@ -3,6 +3,7 @@ import path from 'path';
 import readline from 'readline';
 import { fileURLToPath } from 'url';
 import process from 'process';
+import { DEFAULT_SETTINGS, FILE_PATHS } from '../src/config/defaults.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -12,9 +13,9 @@ const rl = readline.createInterface({
   output: process.stdout
 });
 
-const CONFIG_DIR = path.join(__dirname, '../config');
-const EXAMPLE_CONFIG = path.join(CONFIG_DIR, 'dnscrypt-proxy.toml.example');
-const USER_CONFIG = path.join(CONFIG_DIR, 'dnscrypt-proxy.toml');
+const CONFIG_DIR = path.join(__dirname, '..', FILE_PATHS.CONFIG_DIR);
+const EXAMPLE_CONFIG = path.join(CONFIG_DIR, FILE_PATHS.EXAMPLE_CONFIG);
+const USER_CONFIG = path.join(CONFIG_DIR, FILE_PATHS.USER_CONFIG);
 
 // Ensure config directory exists
 if (!fs.existsSync(CONFIG_DIR)) {
@@ -41,28 +42,28 @@ const exampleConfig = fs.readFileSync(EXAMPLE_CONFIG, 'utf8');
 const questions = [
   {
     name: 'listen_addresses',
-    question: 'Enter listen addresses (comma-separated, default: 127.0.0.1:53): ',
-    default: '127.0.0.1:53'
+    question: `Enter listen addresses (comma-separated, default: ${DEFAULT_SETTINGS.listen_addresses.join(', ')}): `,
+    default: DEFAULT_SETTINGS.listen_addresses.join(', ')
   },
   {
     name: 'max_clients',
-    question: 'Enter maximum number of clients (default: 250): ',
-    default: '250'
+    question: `Enter maximum number of clients (default: ${DEFAULT_SETTINGS.max_clients}): `,
+    default: DEFAULT_SETTINGS.max_clients.toString()
   },
   {
     name: 'log_level',
-    question: 'Enter log level (debug/info/warning/error, default: info): ',
-    default: 'info'
+    question: `Enter log level (${DEFAULT_SETTINGS.log_level}): `,
+    default: DEFAULT_SETTINGS.log_level
   },
   {
     name: 'log_file',
-    question: 'Enter log file path (default: logs/dnscrypt-proxy.log): ',
-    default: 'logs/dnscrypt-proxy.log'
+    question: `Enter log file path (default: ${DEFAULT_SETTINGS.log_file}): `,
+    default: DEFAULT_SETTINGS.log_file
   },
   {
     name: 'fallback_resolvers',
-    question: 'Enter fallback resolvers (comma-separated, default: 9.9.9.9:53,8.8.8.8:53): ',
-    default: '9.9.9.9:53,8.8.8.8:53'
+    question: `Enter fallback resolvers (comma-separated, default: ${DEFAULT_SETTINGS.fallback_resolvers.join(', ')}): `,
+    default: DEFAULT_SETTINGS.fallback_resolvers.join(', ')
   }
 ];
 

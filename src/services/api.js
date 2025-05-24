@@ -1,10 +1,9 @@
 import axios from 'axios';
-
-const API_BASE_URL = 'http://localhost:3000/api'; // Adjust this to match your API endpoint
+import { API_CONFIG } from '../config/defaults';
 
 const api = axios.create({
-  baseURL: API_BASE_URL,
-  timeout: 10000,
+  baseURL: API_CONFIG.BASE_URL,
+  timeout: API_CONFIG.TIMEOUT,
 });
 
 export const fetchLogs = async (limit = 100) => {
@@ -67,6 +66,26 @@ export const saveResolvers = async (resolvers) => {
     return response.data;
   } catch (error) {
     console.error('Error saving resolvers:', error);
+    throw error;
+  }
+};
+
+export const fetchBlocklists = async () => {
+  try {
+    const response = await api.get('/blocklists');
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching blocklists:', error);
+    throw error;
+  }
+};
+
+export const saveBlocklists = async (blocklists) => {
+  try {
+    const response = await api.post('/blocklists', blocklists);
+    return response.data;
+  } catch (error) {
+    console.error('Error saving blocklists:', error);
     throw error;
   }
 }; 

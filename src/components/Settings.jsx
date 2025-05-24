@@ -18,37 +18,13 @@ import {
   FormControl,
 } from '@mui/material';
 import { Save as SaveIcon, Refresh as RefreshIcon } from '@mui/icons-material';
-import axios from 'axios';
+import { fetchSettings, saveSettings } from '../services/api';
+import { DEFAULT_SETTINGS, LOG_LEVELS } from '../config/defaults';
 
 const API_BASE_URL = 'http://localhost:3000/api';
 
 const Settings = () => {
-  const [settings, setSettings] = useState({
-    listen_addresses: ['127.0.0.1:53'],
-    max_clients: 250,
-    ipv4_servers: true,
-    ipv6_servers: false,
-    dnscrypt_servers: true,
-    doh_servers: true,
-    require_dnssec: false,
-    require_nolog: true,
-    require_nofilter: false,
-    disabled_server_names: [],
-    fallback_resolvers: ['9.9.9.9:53', '8.8.8.8:53'],
-    ignore_system_dns: false,
-    netprobe_timeout: 60,
-    log_level: 'info',
-    log_file: '/var/log/dnscrypt-proxy.log',
-    block_ipv6: false,
-    cache: true,
-    cache_size: 1000,
-    cache_ttl_min: 2400,
-    cache_ttl_max: 86400,
-    forwarding_rules: '',
-    cloaking_rules: '',
-    blacklist: '',
-    whitelist: '',
-  });
+  const [settings, setSettings] = useState(DEFAULT_SETTINGS);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -61,8 +37,8 @@ const Settings = () => {
   const loadSettings = async () => {
     try {
       setLoading(true);
-      const response = await axios.get(`${API_BASE_URL}/settings`);
-      setSettings(response.data);
+      const response = await fetchSettings();
+      setSettings(response);
       setError('');
     } catch (err) {
       setError('Failed to load settings');
@@ -75,7 +51,7 @@ const Settings = () => {
   const handleSave = async () => {
     try {
       setLoading(true);
-      await axios.post(`${API_BASE_URL}/settings`, settings);
+      await saveSettings(settings);
       setSuccess('Settings saved successfully');
       setError('');
     } catch (err) {
@@ -338,14 +314,11 @@ const Settings = () => {
                   onChange={handleChange('log_level')}
                   label="Log Level"
                 >
-                  <MenuItem value="emerg">Emergency</MenuItem>
-                  <MenuItem value="alert">Alert</MenuItem>
-                  <MenuItem value="crit">Critical</MenuItem>
-                  <MenuItem value="error">Error</MenuItem>
-                  <MenuItem value="warn">Warning</MenuItem>
-                  <MenuItem value="notice">Notice</MenuItem>
-                  <MenuItem value="info">Info</MenuItem>
-                  <MenuItem value="debug">Debug</MenuItem>
+                  {LOG_LEVELS.map(level => (
+                    <MenuItem key={level} value={level}>
+                      {level.charAt(0).toUpperCase() + level.slice(1)}
+                    </MenuItem>
+                  ))}
                 </Select>
               </FormControl>
             </Grid>

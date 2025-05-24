@@ -15,6 +15,22 @@ app.use(cors());
 const LOG_FILE_PATH = path.join(__dirname, '../../logs/dnscrypt-proxy.log');
 const CONFIG_FILE_PATH = path.join(__dirname, '../../config/dnscrypt-proxy.toml');
 
+// Serve static files from the dist directory in production
+if (process.env.NODE_ENV === 'production') {
+  const distPath = path.join(__dirname, '../../dist');
+  app.use(express.static(distPath));
+  
+  // Handle client-side routing
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(distPath, 'index.html'));
+  });
+} else {
+  // In development, serve the index.html from the root
+  app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, '../../index.html'));
+  });
+}
+
 // Ensure directories exist
 const ensureDirectories = () => {
   const dirs = [
@@ -201,6 +217,39 @@ const saveSettings = (settings) => {
   }
 };
 
+// Function to read resolvers from TOML file
+const readResolvers = () => {
+  try {
+    const settings = readSettings();
+    return {
+      server_names: settings.server_names || [],
+      disabled_server_names: settings.disabled_server_names || [],
+      lb_strategy: settings.lb_strategy || 'p2',
+      lb_estimator: settings.lb_estimator !== undefined ? settings.lb_estimator : true,
+      lb_estimator_interval: settings.lb_estimator_interval || 300
+    };
+  } catch (error) {
+    console.error('Error reading resolvers:', error);
+    throw error;
+  }
+};
+
+// Function to save resolvers to TOML file
+const saveResolvers = (resolvers) => {
+  try {
+    const settings = readSettings();
+    settings.server_names = resolvers.server_names;
+    settings.disabled_server_names = resolvers.disabled_server_names;
+    settings.lb_strategy = resolvers.lb_strategy;
+    settings.lb_estimator = resolvers.lb_estimator;
+    settings.lb_estimator_interval = resolvers.lb_estimator_interval;
+    return saveSettings(settings);
+  } catch (error) {
+    console.error('Error saving resolvers:', error);
+    throw error;
+  }
+};
+
 // Logs endpoints
 app.get('/api/logs', (req, res) => {
   try {
@@ -238,6 +287,21 @@ app.get('/api/settings', (req, res) => {
 app.post('/api/settings', (req, res) => {
   try {
     const settings = req.body;
+    
+    // Handle multiline strings for rules
+    if (settings.forwarding_rules) {
+      settings.forwarding_rules = settings.forwarding_rules.trim();
+    }
+    if (settings.cloaking_rules) {
+      settings.cloaking_rules = settings.cloaking_rules.trim();
+    }
+    if (settings.blacklist) {
+      settings.blacklist = settings.blacklist.trim();
+    }
+    if (settings.whitelist) {
+      settings.whitelist = settings.whitelist.trim();
+    }
+    
     saveSettings(settings);
     return res.json({ message: 'Settings saved successfully' });
   } catch (error) {
@@ -246,17 +310,48 @@ app.post('/api/settings', (req, res) => {
   }
 });
 
-// Resolver endpoints
-app.get('/api/resolvers', (req, res) => {
+// Add new endpoints for blocklists
+app.get('/api/blocklists', (req, res) => {
   try {
     const settings = readSettings();
-    const resolvers = {
-      server_names: settings.server_names || [],
-      disabled_server_names: settings.disabled_server_names || [],
-      lb_strategy: settings.lb_strategy || 'p2',
-      lb_estimator: settings.lb_estimator || true,
-      lb_estimator_interval: settings.lb_estimator_interval || 300
+    const blocklists = {
+      blacklist: settings.blacklist || '',
+      whitelist: settings.whitelist || '',
+      cloaking_rules: settings.cloaking_rules || '',
+      forwarding_rules: settings.forwarding_rules || '',
+      block_ipv6: settings.block_ipv6 || false
     };
+    return res.json(blocklists);
+  } catch (error) {
+    console.error('Error reading blocklists:', error);
+    return res.status(500).json({ error: 'Failed to read blocklists' });
+  }
+});
+
+app.post('/api/blocklists', (req, res) => {
+  try {
+    const settings = readSettings();
+    const { blacklist, whitelist, cloaking_rules, forwarding_rules, block_ipv6 } = req.body;
+    
+    // Update blocklist settings
+    settings.blacklist = blacklist ? blacklist.trim() : '';
+    settings.whitelist = whitelist ? whitelist.trim() : '';
+    settings.cloaking_rules = cloaking_rules ? cloaking_rules.trim() : '';
+    settings.forwarding_rules = forwarding_rules ? forwarding_rules.trim() : '';
+    settings.block_ipv6 = block_ipv6;
+    
+    saveSettings(settings);
+    return res.json({ message: 'Blocklist settings saved successfully' });
+  } catch (error) {
+    console.error('Error saving blocklists:', error);
+    return res.status(500).json({ error: 'Failed to save blocklists' });
+  }
+});
+
+// Resolvers endpoints
+app.get('/api/resolvers', (req, res) => {
+  try {
+    const resolvers = readResolvers();
     return res.json(resolvers);
   } catch (error) {
     console.error('Error reading resolvers:', error);
@@ -266,18 +361,9 @@ app.get('/api/resolvers', (req, res) => {
 
 app.post('/api/resolvers', (req, res) => {
   try {
-    const settings = readSettings();
-    const { server_names, disabled_server_names, lb_strategy, lb_estimator, lb_estimator_interval } = req.body;
-    
-    // Update resolver settings
-    settings.server_names = server_names;
-    settings.disabled_server_names = disabled_server_names;
-    settings.lb_strategy = lb_strategy;
-    settings.lb_estimator = lb_estimator;
-    settings.lb_estimator_interval = lb_estimator_interval;
-    
-    saveSettings(settings);
-    return res.json({ message: 'Resolver settings saved successfully' });
+    const resolvers = req.body;
+    saveResolvers(resolvers);
+    return res.json({ message: 'Resolvers saved successfully' });
   } catch (error) {
     console.error('Error saving resolvers:', error);
     return res.status(500).json({ error: 'Failed to save resolvers' });
@@ -285,7 +371,7 @@ app.post('/api/resolvers', (req, res) => {
 });
 
 // Start server
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`API server running on http://localhost:${PORT}`);
   console.log('Available endpoints:');
@@ -295,6 +381,8 @@ app.listen(PORT, () => {
   console.log('  POST   /api/settings');
   console.log('  GET    /api/resolvers');
   console.log('  POST   /api/resolvers');
+  console.log('  GET    /api/blocklists');
+  console.log('  POST   /api/blocklists');
   console.log(`Reading logs from: ${LOG_FILE_PATH}`);
   console.log(`Reading config from: ${CONFIG_FILE_PATH}`);
 });

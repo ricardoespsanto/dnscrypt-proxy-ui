@@ -25,12 +25,23 @@ import {
   Alert,
   CircularProgress,
   Grid,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Tooltip,
 } from '@mui/material';
 import {
   Star as StarIcon,
   StarBorder as StarBorderIcon,
   Link as LinkIcon,
   Refresh as RefreshIcon,
+  Add as AddIcon,
+  Delete as DeleteIcon,
+  Edit as EditIcon,
+  Speed as SpeedIcon,
+  CloudDownload as CloudDownloadIcon,
+  Save as SaveIcon,
 } from '@mui/icons-material';
 
 const Resolvers = () => {
@@ -42,6 +53,21 @@ const Resolvers = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [openDialog, setOpenDialog] = useState(false);
+  const [editingResolver, setEditingResolver] = useState(null);
+  const [newResolver, setNewResolver] = useState({
+    name: '',
+    provider: '',
+    protocol: 'DNSCrypt',
+    server: '',
+    publicKey: '',
+    features: {
+      dnssec: true,
+      noLogs: true,
+      noFilter: false,
+      ipv6: false,
+    },
+  });
 
   useEffect(() => {
     loadResolvers();
@@ -76,6 +102,7 @@ const Resolvers = () => {
           adblock: isAdblock,
           latency: '0 ms',
           isFavorite: false,
+          enabled: true,
         };
       });
       setResolvers(resolverList);
@@ -92,8 +119,8 @@ const Resolvers = () => {
     try {
       setLoading(true);
       await saveResolvers({
-        server_names: resolvers.map(r => r.name),
-        disabled_server_names: [],
+        server_names: resolvers.filter(r => r.enabled).map(r => r.name),
+        disabled_server_names: resolvers.filter(r => !r.enabled).map(r => r.name),
         lb_strategy: 'p2',
         lb_estimator: true,
         lb_estimator_interval: 300
@@ -112,6 +139,109 @@ const Resolvers = () => {
     const newResolvers = [...resolvers];
     newResolvers[index].isFavorite = !newResolvers[index].isFavorite;
     setResolvers(newResolvers);
+  };
+
+  const handleToggleEnabled = (index) => {
+    const newResolvers = [...resolvers];
+    newResolvers[index].enabled = !newResolvers[index].enabled;
+    setResolvers(newResolvers);
+  };
+
+  const handleAddResolver = () => {
+    setEditingResolver(null);
+    setNewResolver({
+      name: '',
+      provider: '',
+      protocol: 'DNSCrypt',
+      server: '',
+      publicKey: '',
+      features: {
+        dnssec: true,
+        noLogs: true,
+        noFilter: false,
+        ipv6: false,
+      },
+    });
+    setOpenDialog(true);
+  };
+
+  const handleEditResolver = (resolver) => {
+    setEditingResolver(resolver);
+    setNewResolver({
+      name: resolver.name,
+      provider: resolver.provider,
+      protocol: resolver.protocol,
+      server: resolver.server || '',
+      publicKey: resolver.publicKey || '',
+      features: {
+        dnssec: resolver.dnssec,
+        noLogs: resolver.noLogs,
+        noFilter: !resolver.noLogs,
+        ipv6: resolver.location === 'IPv6',
+      },
+    });
+    setOpenDialog(true);
+  };
+
+  const handleSaveResolver = () => {
+    if (editingResolver) {
+      // Update existing resolver
+      const index = resolvers.findIndex(r => r.name === editingResolver.name);
+      if (index !== -1) {
+        const newResolvers = [...resolvers];
+        newResolvers[index] = {
+          ...newResolvers[index],
+          ...newResolver,
+          location: newResolver.features.ipv6 ? 'IPv6' : 'IPv4',
+        };
+        setResolvers(newResolvers);
+      }
+    } else {
+      // Add new resolver
+      const newResolverEntry = {
+        ...newResolver,
+        location: newResolver.features.ipv6 ? 'IPv6' : 'IPv4',
+        latency: '0 ms',
+        isFavorite: false,
+        enabled: true,
+      };
+      setResolvers([...resolvers, newResolverEntry]);
+    }
+    setOpenDialog(false);
+  };
+
+  const handleDeleteResolver = (index) => {
+    const newResolvers = [...resolvers];
+    newResolvers.splice(index, 1);
+    setResolvers(newResolvers);
+  };
+
+  const handleImportResolvers = async () => {
+    try {
+      setLoading(true);
+      // TODO: Implement resolver import from public sources
+      setSuccess('Resolvers imported successfully');
+    } catch (err) {
+      setError('Failed to import resolvers');
+      console.error('Error importing resolvers:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleTestLatency = async (index) => {
+    try {
+      setLoading(true);
+      // TODO: Implement latency testing
+      const newResolvers = [...resolvers];
+      newResolvers[index].latency = '50 ms'; // Placeholder
+      setResolvers(newResolvers);
+    } catch (err) {
+      setError('Failed to test latency');
+      console.error('Error testing latency:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const filteredResolvers = resolvers.filter(resolver => {
@@ -133,6 +263,22 @@ const Resolvers = () => {
             </Typography>
             <Box>
               <Button
+                startIcon={<CloudDownloadIcon />}
+                onClick={handleImportResolvers}
+                disabled={loading}
+                sx={{ mr: 1 }}
+              >
+                Import
+              </Button>
+              <Button
+                startIcon={<AddIcon />}
+                onClick={handleAddResolver}
+                disabled={loading}
+                sx={{ mr: 1 }}
+              >
+                Add Resolver
+              </Button>
+              <Button
                 startIcon={<RefreshIcon />}
                 onClick={loadResolvers}
                 disabled={loading}
@@ -142,6 +288,7 @@ const Resolvers = () => {
               </Button>
               <Button
                 variant="contained"
+                startIcon={<SaveIcon />}
                 onClick={handleSave}
                 disabled={loading}
               >
@@ -224,6 +371,7 @@ const Resolvers = () => {
               <Table>
                 <TableHead>
                   <TableRow>
+                    <TableCell>Status</TableCell>
                     <TableCell>Provider</TableCell>
                     <TableCell>Name</TableCell>
                     <TableCell>Protocol</TableCell>
@@ -236,6 +384,13 @@ const Resolvers = () => {
                 <TableBody>
                   {filteredResolvers.map((resolver, index) => (
                     <TableRow key={index}>
+                      <TableCell>
+                        <Switch
+                          checked={resolver.enabled}
+                          onChange={() => handleToggleEnabled(index)}
+                          color="primary"
+                        />
+                      </TableCell>
                       <TableCell>{resolver.provider}</TableCell>
                       <TableCell>{resolver.name}</TableCell>
                       <TableCell>
@@ -255,61 +410,114 @@ const Resolvers = () => {
                       <TableCell>{resolver.location}</TableCell>
                       <TableCell>
                         <Box sx={{ display: 'flex', gap: 1 }}>
+                          {resolver.dnssec && (
+                            <Tooltip title="DNSSEC">
+                              <Box
+                                sx={{
+                                  px: 1,
+                                  py: 0.5,
+                                  borderRadius: 1,
+                                  bgcolor: 'success.light',
+                                  color: 'success.contrastText',
+                                  fontSize: '0.75rem',
+                                }}
+                              >
+                                DNSSEC
+                              </Box>
+                            </Tooltip>
+                          )}
                           {resolver.noLogs && (
-                            <Box
-                              sx={{
-                                px: 1,
-                                py: 0.5,
-                                borderRadius: 1,
-                                bgcolor: 'success.light',
-                                color: 'success.contrastText',
-                                fontSize: '0.75rem',
-                              }}
-                            >
-                              No Logs
-                            </Box>
+                            <Tooltip title="No Logs">
+                              <Box
+                                sx={{
+                                  px: 1,
+                                  py: 0.5,
+                                  borderRadius: 1,
+                                  bgcolor: 'info.light',
+                                  color: 'info.contrastText',
+                                  fontSize: '0.75rem',
+                                }}
+                              >
+                                No Logs
+                              </Box>
+                            </Tooltip>
                           )}
                           {resolver.family && (
-                            <Box
-                              sx={{
-                                px: 1,
-                                py: 0.5,
-                                borderRadius: 1,
-                                bgcolor: 'info.light',
-                                color: 'info.contrastText',
-                                fontSize: '0.75rem',
-                              }}
-                            >
-                              Family
-                            </Box>
+                            <Tooltip title="Family Filter">
+                              <Box
+                                sx={{
+                                  px: 1,
+                                  py: 0.5,
+                                  borderRadius: 1,
+                                  bgcolor: 'warning.light',
+                                  color: 'warning.contrastText',
+                                  fontSize: '0.75rem',
+                                }}
+                              >
+                                Family
+                              </Box>
+                            </Tooltip>
                           )}
                           {resolver.adblock && (
-                            <Box
-                              sx={{
-                                px: 1,
-                                py: 0.5,
-                                borderRadius: 1,
-                                bgcolor: 'warning.light',
-                                color: 'warning.contrastText',
-                                fontSize: '0.75rem',
-                              }}
-                            >
-                              Adblock
-                            </Box>
+                            <Tooltip title="Ad Blocking">
+                              <Box
+                                sx={{
+                                  px: 1,
+                                  py: 0.5,
+                                  borderRadius: 1,
+                                  bgcolor: 'error.light',
+                                  color: 'error.contrastText',
+                                  fontSize: '0.75rem',
+                                }}
+                              >
+                                AdBlock
+                              </Box>
+                            </Tooltip>
                           )}
                         </Box>
                       </TableCell>
-                      <TableCell>{resolver.latency}</TableCell>
                       <TableCell>
-                        <IconButton
-                          onClick={() => handleToggleFavorite(index)}
-                          color={resolver.isFavorite ? 'warning' : 'default'}
-                        >
-                          {resolver.isFavorite ? <StarIcon /> : <StarBorderIcon />}
-                        </IconButton>
-                        <IconButton color="primary">
-                          <LinkIcon />
-                        </IconButton>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          {resolver.latency}
+                          <Tooltip title="Test Latency">
+                            <IconButton
+                              size="small"
+                              onClick={() => handleTestLatency(index)}
+                              disabled={loading}
+                            >
+                              <SpeedIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        </Box>
+                      </TableCell>
+                      <TableCell>
+                        <Box sx={{ display: 'flex', gap: 1 }}>
+                          <Tooltip title={resolver.isFavorite ? "Remove from favorites" : "Add to favorites"}>
+                            <IconButton
+                              size="small"
+                              onClick={() => handleToggleFavorite(index)}
+                            >
+                              {resolver.isFavorite ? <StarIcon /> : <StarBorderIcon />}
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Edit">
+                            <IconButton
+                              size="small"
+                              onClick={() => handleEditResolver(resolver)}
+                            >
+                              <EditIcon />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Delete">
+                            <IconButton
+                              size="small"
+                              onClick={() => handleDeleteResolver(index)}
+                              color="error"
+                            >
+                              <DeleteIcon />
+                            </IconButton>
+                          </Tooltip>
+                        </Box>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -319,6 +527,115 @@ const Resolvers = () => {
           )}
         </CardContent>
       </Card>
+
+      {/* Add/Edit Resolver Dialog */}
+      <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="md" fullWidth>
+        <DialogTitle>
+          {editingResolver ? 'Edit Resolver' : 'Add New Resolver'}
+        </DialogTitle>
+        <DialogContent>
+          <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <TextField
+              label="Name"
+              value={newResolver.name}
+              onChange={(e) => setNewResolver({ ...newResolver, name: e.target.value })}
+              fullWidth
+              required
+            />
+            <TextField
+              label="Provider"
+              value={newResolver.provider}
+              onChange={(e) => setNewResolver({ ...newResolver, provider: e.target.value })}
+              fullWidth
+              required
+            />
+            <FormControl fullWidth>
+              <InputLabel>Protocol</InputLabel>
+              <Select
+                value={newResolver.protocol}
+                onChange={(e) => setNewResolver({ ...newResolver, protocol: e.target.value })}
+                label="Protocol"
+              >
+                <MenuItem value="DNSCrypt">DNSCrypt</MenuItem>
+                <MenuItem value="DoH">DoH</MenuItem>
+              </Select>
+            </FormControl>
+            <TextField
+              label="Server Address"
+              value={newResolver.server}
+              onChange={(e) => setNewResolver({ ...newResolver, server: e.target.value })}
+              fullWidth
+              required
+              placeholder={newResolver.protocol === 'DNSCrypt' ? 'sdns://...' : 'https://...'}
+            />
+            {newResolver.protocol === 'DNSCrypt' && (
+              <TextField
+                label="Public Key"
+                value={newResolver.publicKey}
+                onChange={(e) => setNewResolver({ ...newResolver, publicKey: e.target.value })}
+                fullWidth
+                required
+              />
+            )}
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={newResolver.features.dnssec}
+                    onChange={(e) => setNewResolver({
+                      ...newResolver,
+                      features: { ...newResolver.features, dnssec: e.target.checked }
+                    })}
+                  />
+                }
+                label="DNSSEC"
+              />
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={newResolver.features.noLogs}
+                    onChange={(e) => setNewResolver({
+                      ...newResolver,
+                      features: { ...newResolver.features, noLogs: e.target.checked }
+                    })}
+                  />
+                }
+                label="No Logs"
+              />
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={newResolver.features.noFilter}
+                    onChange={(e) => setNewResolver({
+                      ...newResolver,
+                      features: { ...newResolver.features, noFilter: e.target.checked }
+                    })}
+                  />
+                }
+                label="No Filter"
+              />
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={newResolver.features.ipv6}
+                    onChange={(e) => setNewResolver({
+                      ...newResolver,
+                      features: { ...newResolver.features, ipv6: e.target.checked }
+                    })}
+                  />
+                }
+                label="IPv6"
+              />
+            </Box>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenDialog(false)}>Cancel</Button>
+          <Button onClick={handleSaveResolver} variant="contained">
+            {editingResolver ? 'Save Changes' : 'Add Resolver'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

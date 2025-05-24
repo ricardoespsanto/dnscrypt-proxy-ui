@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { fetchSettings, saveSettings } from '../services/api';
+import { fetchBlocklists, saveBlocklists } from '../services/api';
 import {
   Box,
   Card,
@@ -45,14 +45,8 @@ const Blocklists = () => {
   const loadSettings = async () => {
     try {
       setLoading(true);
-      const data = await fetchSettings();
-      setSettings({
-        blacklist: data.blacklist || '',
-        whitelist: data.whitelist || '',
-        cloaking_rules: data.cloaking_rules || '',
-        forwarding_rules: data.forwarding_rules || '',
-        block_ipv6: data.block_ipv6 || false,
-      });
+      const data = await fetchBlocklists();
+      setSettings(data);
       setError('');
     } catch (err) {
       setError('Failed to load settings');
@@ -65,7 +59,7 @@ const Blocklists = () => {
   const handleSave = async () => {
     try {
       setLoading(true);
-      await saveSettings(settings);
+      await saveBlocklists(settings);
       setSuccess('Settings saved successfully');
       setError('');
     } catch (err) {
@@ -93,6 +87,11 @@ const Blocklists = () => {
       ...prev,
       [type]: rules.join('\n')
     }));
+  };
+
+  const handleChange = (field) => (event) => {
+    const value = event.target.type === 'checkbox' ? event.target.checked : event.target.value;
+    setSettings(prev => ({ ...prev, [field]: value }));
   };
 
   const renderRulesList = (type, title) => {
@@ -187,7 +186,7 @@ const Blocklists = () => {
                 control={
                   <Switch
                     checked={settings.block_ipv6}
-                    onChange={(e) => setSettings(prev => ({ ...prev, block_ipv6: e.target.checked }))}
+                    onChange={handleChange('block_ipv6')}
                   />
                 }
                 label="Block IPv6"

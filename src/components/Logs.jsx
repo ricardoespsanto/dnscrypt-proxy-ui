@@ -43,7 +43,7 @@ const Logs = () => {
       await clearLogs();
       setLogs([]);
     } catch (err) {
-      setError('Failed to clear logs. Please try again.');
+      setError('Failed to clear logs. Please try again.', err);
     }
   };
 

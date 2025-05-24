@@ -76,7 +76,7 @@ const readSettings = () => {
         ignore_system_dns: false,
         netprobe_timeout: 60,
         log_level: 'info',
-        log_file: LOG_FILE_PATH,
+        log_file: '/var/log/dnscrypt-proxy.log',
         block_ipv6: false,
         cache: true,
         cache_size: 1000,
@@ -90,24 +90,50 @@ const readSettings = () => {
     }
 
     const content = fs.readFileSync(CONFIG_FILE_PATH, 'utf8');
-    // Parse TOML content and convert to our settings format
-    // This is a simplified version - you might want to use a TOML parser
     const settings = {};
     const lines = content.split('\n');
     
     for (const line of lines) {
-      if (line.trim() && !line.startsWith('#')) {
-        const [key, value] = line.split('=').map(s => s.trim());
-        if (key && value) {
-          // Convert TOML values to JavaScript values
-          if (value === 'true') settings[key] = true;
-          else if (value === 'false') settings[key] = false;
-          else if (value.startsWith('[') && value.endsWith(']')) {
-            settings[key] = value.slice(1, -1).split(',').map(s => s.trim().replace(/"/g, ''));
-          }
-          else if (!isNaN(value)) settings[key] = Number(value);
-          else settings[key] = value.replace(/"/g, '');
-        }
+      // Skip comments and empty lines
+      if (!line.trim() || line.trim().startsWith('#')) continue;
+      
+      // Split on first equals sign
+      const equalIndex = line.indexOf('=');
+      if (equalIndex === -1) continue;
+      
+      const key = line.substring(0, equalIndex).trim();
+      let value = line.substring(equalIndex + 1).trim();
+      
+      // Remove inline comments
+      const commentIndex = value.indexOf('#');
+      if (commentIndex !== -1) {
+        value = value.substring(0, commentIndex).trim();
+      }
+      
+      // Parse value based on type
+      if (value === 'true') settings[key] = true;
+      else if (value === 'false') settings[key] = false;
+      else if (value.startsWith('[') && value.endsWith(']')) {
+        // Parse array
+        const arrayContent = value.slice(1, -1);
+        settings[key] = arrayContent.split(',')
+          .map(item => item.trim().replace(/['"]/g, ''));
+      }
+      else if (value.startsWith("'''") && value.endsWith("'''")) {
+        // Parse multiline string
+        settings[key] = value.slice(3, -3);
+      }
+      else if (value.startsWith("'") && value.endsWith("'")) {
+        // Parse single-line string
+        settings[key] = value.slice(1, -1);
+      }
+      else if (!isNaN(value)) {
+        // Parse number
+        settings[key] = Number(value);
+      }
+      else {
+        // Default to string
+        settings[key] = value;
       }
     }
 

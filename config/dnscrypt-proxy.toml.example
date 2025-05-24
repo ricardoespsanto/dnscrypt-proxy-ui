@@ -1,0 +1,83 @@
+# DNSCrypt-Proxy Configuration File
+# Copy this file to dnscrypt-proxy.toml and modify as needed
+
+# Server settings
+listen_addresses = ['127.0.0.1:53', '[::1]:53']
+max_clients = 250
+ipv4_servers = true
+ipv6_servers = false
+dnscrypt_servers = true
+doh_servers = true
+require_dnssec = false
+require_nolog = true
+require_nofilter = false
+disabled_server_names = []
+
+# Fallback resolvers
+fallback_resolvers = ['9.9.9.9:53', '8.8.8.8:53']
+ignore_system_dns = false
+
+# Network settings
+netprobe_timeout = 60
+block_ipv6 = false
+block_undelegated = true
+block_unqualified = true
+block_unknown = false
+
+# Cache settings
+cache = true
+cache_size = 1000
+cache_ttl_min = 2400
+cache_ttl_max = 86400
+cache_neg_ttl = 60
+
+# Logging settings
+log_level = 'info'
+log_file = '/var/log/dnscrypt-proxy.log'
+log_format = 'ltsv'
+log_rotation = true
+log_rotation_interval = 86400
+log_rotation_max_size = 10485760
+log_rotation_max_files = 7
+
+# Server selection
+server_names = []
+lb_strategy = 'p2'
+lb_estimator = true
+lb_estimator_interval = 300
+
+# Timeouts
+timeout = 5000
+keepalive = 30
+tcp_only = false
+tcp_fast_open = true
+tcp_fast_open_qlen = 20
+
+# DNSSEC settings
+dnssec = true
+dnssec_validation = true
+dnssec_validation_required = false
+dnssec_validation_required_servers = []
+
+# Filtering settings
+filters = []
+blocked_names_file = ''
+allowed_names_file = ''
+cloaking_rules_file = ''
+forwarding_rules_file = ''
+
+# Example rules
+cloaking_rules = '''
+# example.com 192.168.1.1
+# *.example.com 192.168.1.2
+'''
+
+forwarding_rules = '''
+# example.com 9.9.9.9:53
+# *.example.com 8.8.8.8:53
+'''
+
+blacklist = '''
+# ads.example.com
+# tracking.example.com
+''' 

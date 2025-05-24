@@ -48,7 +48,6 @@ const Blocklists = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
-  const [searchQuery, setSearchQuery] = useState('');
   const [blocklists, setBlocklists] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -162,6 +161,10 @@ const Blocklists = () => {
     handleSave(); // Save changes immediately
   };
 
+  const handleBlocklistChange = (event) => {
+    setSelectedBlocklists(event.target.value);
+  };
+
   const handleImportBlocklists = async () => {
     try {
       setLoading(true);
@@ -176,8 +179,8 @@ const Blocklists = () => {
   };
 
   const filteredBlocklists = blocklists.filter(blocklist =>
-    blocklist.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    blocklist.url.toLowerCase().includes(searchQuery.toLowerCase())
+    blocklist.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    blocklist.url.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
@@ -316,6 +319,40 @@ const Blocklists = () => {
                 ))}
               </Select>
             </FormControl>
+          </Box>
+
+          <Box sx={{ mt: 3 }}>
+            <TableContainer component={Paper}>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Name</TableCell>
+                    <TableCell>URL</TableCell>
+                    <TableCell>Format</TableCell>
+                    <TableCell>Status</TableCell>
+                    <TableCell>Actions</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {filteredBlocklists.map((blocklist, index) => (
+                    <TableRow key={index}>
+                      <TableCell>{blocklist.name}</TableCell>
+                      <TableCell>{blocklist.url}</TableCell>
+                      <TableCell>{blocklist.format}</TableCell>
+                      <TableCell>{blocklist.enabled ? 'Enabled' : 'Disabled'}</TableCell>
+                      <TableCell>
+                        <IconButton onClick={() => handleEditBlocklist(blocklist)} size="small">
+                          <EditIcon />
+                        </IconButton>
+                        <IconButton onClick={() => handleDeleteBlocklist(index)} size="small">
+                          <DeleteIcon />
+                        </IconButton>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
           </Box>
         </CardContent>
       </Card>

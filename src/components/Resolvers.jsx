@@ -52,10 +52,7 @@ const Resolvers = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
-  const [searchQuery, setSearchQuery] = useState('');
   const [protocolFilter, setProtocolFilter] = useState('all');
-  const [locationFilter, setLocationFilter] = useState('any');
-  const [noLogsFilter, setNoLogsFilter] = useState(false);
   const [resolvers, setResolvers] = useState([]);
   const [lbStrategy, setLbStrategy] = useState('p2');
   const [lbEstimator, setLbEstimator] = useState(true);
@@ -80,7 +77,6 @@ const Resolvers = () => {
   });
   const [selectedResolvers, setSelectedResolvers] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filter, setFilter] = useState('all');
 
   useEffect(() => {
     loadResolvers();
@@ -306,13 +302,15 @@ const Resolvers = () => {
     }
   };
 
+  const handleResolverChange = (event) => {
+    setSelectedResolvers(event.target.value);
+  };
+
   const filteredResolvers = resolvers.filter(resolver => {
-    const matchesSearch = resolver.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         resolver.provider.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSearch = resolver.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         resolver.provider.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesProtocol = protocolFilter === 'all' || resolver.protocol === protocolFilter;
-    const matchesLocation = locationFilter === 'any' || resolver.location === locationFilter;
-    const matchesNoLogs = !noLogsFilter || resolver.features.noLogs;
-    return matchesSearch && matchesProtocol && matchesLocation && matchesNoLogs;
+    return matchesSearch && matchesProtocol;
   });
 
   return (
@@ -336,6 +334,24 @@ const Resolvers = () => {
               Resolvers
             </Typography>
             <Box sx={{ display: 'flex', gap: 1 }}>
+              <Button
+                startIcon={<CloudDownloadIcon />}
+                onClick={handleImportResolvers}
+                disabled={loading}
+                size={isMobile ? 'small' : 'medium'}
+                fullWidth={isMobile}
+              >
+                Import
+              </Button>
+              <Button
+                startIcon={<AddIcon />}
+                onClick={handleAddResolver}
+                disabled={loading}
+                size={isMobile ? 'small' : 'medium'}
+                fullWidth={isMobile}
+              >
+                Add Resolver
+              </Button>
               <Button
                 startIcon={<RefreshIcon />}
                 onClick={loadResolvers}
@@ -394,17 +410,62 @@ const Resolvers = () => {
               <FormControl fullWidth size={isMobile ? 'small' : 'medium'}>
                 <InputLabel>Filter</InputLabel>
                 <Select
-                  value={filter}
-                  onChange={(e) => setFilter(e.target.value)}
+                  value={protocolFilter}
+                  onChange={(e) => setProtocolFilter(e.target.value)}
                   label="Filter"
                 >
                   <MenuItem value="all">All</MenuItem>
-                  <MenuItem value="dnscrypt">DNSCrypt</MenuItem>
-                  <MenuItem value="doh">DoH</MenuItem>
+                  <MenuItem value="DNSCrypt">DNSCrypt</MenuItem>
+                  <MenuItem value="DoH">DoH</MenuItem>
                 </Select>
               </FormControl>
             </Grid>
           </Grid>
+
+          <Box sx={{ mt: 3 }}>
+            <TableContainer component={Paper}>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Name</TableCell>
+                    <TableCell>Provider</TableCell>
+                    <TableCell>Protocol</TableCell>
+                    <TableCell>Location</TableCell>
+                    <TableCell>Latency</TableCell>
+                    <TableCell>Actions</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {filteredResolvers.map((resolver, index) => (
+                    <TableRow key={index}>
+                      <TableCell>{resolver.name}</TableCell>
+                      <TableCell>{resolver.provider}</TableCell>
+                      <TableCell>{resolver.protocol}</TableCell>
+                      <TableCell>{resolver.location}</TableCell>
+                      <TableCell>{resolver.latency}</TableCell>
+                      <TableCell>
+                        <IconButton onClick={() => handleToggleEnabled(index)} size="small">
+                          {resolver.enabled ? <StarIcon /> : <StarBorderIcon />}
+                        </IconButton>
+                        <IconButton onClick={() => handleToggleFavorite(index)} size="small">
+                          {resolver.isFavorite ? <StarIcon /> : <StarBorderIcon />}
+                        </IconButton>
+                        <IconButton onClick={() => handleEditResolver(resolver)} size="small">
+                          <EditIcon />
+                        </IconButton>
+                        <IconButton onClick={() => handleDeleteResolver(index)} size="small">
+                          <DeleteIcon />
+                        </IconButton>
+                        <IconButton onClick={() => handleTestLatency(index)} size="small">
+                          <SpeedIcon />
+                        </IconButton>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Box>
 
           <Box sx={{ mt: 3 }}>
             <FormControl fullWidth size={isMobile ? 'small' : 'medium'}>
@@ -427,8 +488,8 @@ const Resolvers = () => {
                 )}
               >
                 {filteredResolvers.map((resolver) => (
-                  <MenuItem key={resolver} value={resolver}>
-                    {resolver}
+                  <MenuItem key={resolver.name} value={resolver.name}>
+                    {resolver.name}
                   </MenuItem>
                 ))}
               </Select>

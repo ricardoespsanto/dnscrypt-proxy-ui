@@ -15,6 +15,8 @@ import {
   MenuItem,
   useTheme,
   useMediaQuery,
+  FormControlLabel,
+  Switch,
 } from '@mui/material';
 import { Refresh as RefreshIcon } from '@mui/icons-material';
 import { logsApi } from '../services/api';
@@ -117,15 +119,36 @@ const Logs = () => {
             >
               Logs
             </Typography>
-            <Button
-              startIcon={<RefreshIcon />}
-              onClick={loadLogs}
-              disabled={loading}
-              size={isMobile ? 'small' : 'medium'}
-              fullWidth={isMobile}
-            >
-              Refresh
-            </Button>
+            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={autoRefresh}
+                    onChange={(e) => setAutoRefresh(e.target.checked)}
+                    size={isMobile ? 'small' : 'medium'}
+                  />
+                }
+                label="Auto Refresh"
+              />
+              <Button
+                startIcon={<RefreshIcon />}
+                onClick={loadLogs}
+                disabled={loading}
+                size={isMobile ? 'small' : 'medium'}
+                fullWidth={isMobile}
+              >
+                Refresh
+              </Button>
+              <Button
+                onClick={handleClearLogs}
+                disabled={loading}
+                size={isMobile ? 'small' : 'medium'}
+                fullWidth={isMobile}
+                color="error"
+              >
+                Clear Logs
+              </Button>
+            </Box>
           </Box>
 
           <Snackbar 

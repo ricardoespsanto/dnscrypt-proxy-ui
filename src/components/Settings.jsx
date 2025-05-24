@@ -28,7 +28,6 @@ import { DEFAULT_SETTINGS, LOG_LEVELS } from '../config/defaults';
 const Settings = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-  const isTablet = useMediaQuery(theme.breakpoints.down('md'));
 
   const [settings, setSettings] = useState({
     listen_addresses: ['127.0.0.1:53'],

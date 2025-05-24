@@ -6,6 +6,7 @@ import { fileURLToPath } from 'url';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import os from 'os';
+import process from 'process';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -578,19 +579,20 @@ const detectServiceManager = async () => {
 // Function to get service status based on system
 const getServiceStatus = async (serviceManager) => {
   try {
+    let stdout;
     switch (serviceManager) {
       case 'systemd':
-        const { stdout: systemdStatus } = await execAsync('systemctl is-active dnscrypt-proxy');
-        return systemdStatus.trim();
+        ({ stdout } = await execAsync('systemctl is-active dnscrypt-proxy'));
+        return stdout.trim();
       case 'openrc':
-        const { stdout: openrcStatus } = await execAsync('rc-service dnscrypt-proxy status');
-        return openrcStatus.includes('started') ? 'active' : 'inactive';
+        ({ stdout } = await execAsync('rc-service dnscrypt-proxy status'));
+        return stdout.includes('started') ? 'active' : 'inactive';
       case 'sysv':
-        const { stdout: sysvStatus } = await execAsync('service dnscrypt-proxy status');
-        return sysvStatus.includes('running') ? 'active' : 'inactive';
+        ({ stdout } = await execAsync('service dnscrypt-proxy status'));
+        return stdout.includes('running') ? 'active' : 'inactive';
       case 'launchd':
-        const { stdout: launchdStatus } = await execAsync('launchctl list | grep dnscrypt-proxy');
-        return launchdStatus ? 'active' : 'inactive';
+        ({ stdout } = await execAsync('launchctl list | grep dnscrypt-proxy'));
+        return stdout ? 'active' : 'inactive';
       default:
         return 'unknown';
     }

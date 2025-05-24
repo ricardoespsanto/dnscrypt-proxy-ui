@@ -7,15 +7,24 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import os from 'os';
 import process from 'process';
+import dns from 'dns';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-app.use(express.json());
-app.use(cors());
+app.use(express.json({ limit: '50mb' }));
+app.use(cors({
+  origin: ['http://localhost:5173', 'http://127.0.0.1:5173'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
+}));
 
 const execAsync = promisify(exec);
+
+const resolve4 = promisify(dns.resolve4);
+const resolve6 = promisify(dns.resolve6);
 
 // Log file path
 const LOG_FILE_PATH = path.join(__dirname, '../../logs/dnscrypt-proxy.log');
@@ -474,6 +483,63 @@ app.post('/api/resolvers', (req, res) => {
   } catch (error) {
     console.error('Error saving resolvers:', error);
     return res.status(500).json({ error: 'Failed to save resolvers' });
+  }
+});
+
+// Add new endpoint for latency testing
+app.post('/api/resolvers/test-latency', async (req, res) => {
+  try {
+    const { server, protocol } = req.body;
+    if (!server) {
+      return res.status(400).json({ error: 'Server address is required' });
+    }
+
+    const startTime = performance.now();
+    let latency;
+    let error = null;
+
+    try {
+      if (protocol === 'DoH') {
+        // For DoH, we'll make a test request to the server
+        const response = await fetch(server, {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/dns-json',
+          },
+          timeout: 5000, // 5 second timeout
+        });
+        if (!response.ok) {
+          throw new Error(`DoH server test failed: ${response.status}`);
+        }
+      } else {
+        // For DNSCrypt, we'll use dig to test the server
+        const testDomain = 'example.com';
+        const { stdout } = await execAsync(`dig @${server} ${testDomain} +short`, {
+          timeout: 5000 // 5 second timeout
+        });
+        if (!stdout.trim()) {
+          throw new Error('No response from DNSCrypt server');
+        }
+      }
+      latency = Math.round(performance.now() - startTime);
+    } catch (testError) {
+      error = testError.message;
+      latency = null;
+    }
+
+    return res.json({ 
+      latency,
+      error,
+      server,
+      protocol,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Error testing latency:', error);
+    return res.status(500).json({ 
+      error: 'Failed to test latency',
+      details: error.message
+    });
   }
 });
 

@@ -34,6 +34,9 @@ import {
   OutlinedInput,
   useTheme,
   useMediaQuery,
+  TablePagination,
+  Checkbox,
+  LinearProgress,
 } from '@mui/material';
 import {
   Star as StarIcon,
@@ -77,6 +80,26 @@ const Resolvers = () => {
   });
   const [selectedResolvers, setSelectedResolvers] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(25);
+  const [featureFilters, setFeatureFilters] = useState({
+    dnssec: false,
+    noLogs: false,
+    noFilter: false,
+    ipv6: false,
+    family: false,
+    adblock: false,
+  });
+  const [sortConfig, setSortConfig] = useState({
+    key: 'name',
+    direction: 'asc'
+  });
+  const [testingLatency, setTestingLatency] = useState(false);
+  const [latencyErrors, setLatencyErrors] = useState({});
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [importingResolvers, setImportingResolvers] = useState([]);
+  const [importProgress, setImportProgress] = useState(0);
+  const [importStatus, setImportStatus] = useState('');
 
   useEffect(() => {
     loadResolvers();
@@ -198,9 +221,41 @@ const Resolvers = () => {
     setResolvers(newResolvers);
   };
 
+  const testResolver = async (resolver) => {
+    try {
+      const response = await fetch(`http://localhost:3000/api/resolvers/test-latency`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          server: resolver.server,
+          protocol: resolver.protocol
+        })
+      });
+      
+      const data = await response.json();
+      return {
+        ...resolver,
+        latency: data.latency ? `${data.latency} ms` : 'Error',
+        error: data.error
+      };
+    } catch (err) {
+      return {
+        ...resolver,
+        latency: 'Error',
+        error: err.message
+      };
+    }
+  };
+
   const handleImportResolvers = async () => {
     try {
       setLoading(true);
+      setImportDialogOpen(true);
+      setImportStatus('Fetching resolver lists...');
+      setImportProgress(0);
+
       const sources = [
         {
           name: 'Public Resolvers',
@@ -223,20 +278,33 @@ const Resolvers = () => {
       
       for (const source of sources) {
         try {
+          setImportStatus(`Fetching ${source.name}...`);
           const response = await fetch(source.url);
           const text = await response.text();
           
           // Parse the markdown content to extract resolver information
           const lines = text.split('\n');
           let currentResolver = null;
+          let currentServer = '';
+          let currentPublicKey = '';
+          let currentProvider = '';
           
           for (const line of lines) {
-            if (line.startsWith('## ')) {
-              // New resolver entry
+            const trimmedLine = line.trim();
+            
+            if (trimmedLine.startsWith('## ')) {
+              // Save previous resolver if exists
               if (currentResolver) {
-                importedResolvers.push(currentResolver);
+                if (currentServer) {
+                  currentResolver.server = currentServer;
+                  currentResolver.publicKey = currentPublicKey;
+                  currentResolver.provider = currentProvider || currentResolver.provider;
+                  importedResolvers.push(currentResolver);
+                }
               }
-              const name = line.substring(3).trim();
+              
+              // Start new resolver
+              const name = trimmedLine.substring(3).trim();
               currentResolver = {
                 name,
                 provider: name.split('-')[0].charAt(0).toUpperCase() + name.split('-')[0].slice(1),
@@ -252,17 +320,43 @@ const Resolvers = () => {
                 },
                 latency: '0 ms',
                 isFavorite: false,
-                enabled: true
+                enabled: true,
+                server: '',
+                publicKey: ''
               };
-            } else if (currentResolver && line.startsWith('sdns://')) {
-              currentResolver.server = line.trim();
-            } else if (currentResolver && line.startsWith('Public key:')) {
-              currentResolver.publicKey = line.split(':')[1].trim();
+              currentServer = '';
+              currentPublicKey = '';
+              currentProvider = '';
+            } else if (currentResolver) {
+              // Extract server address
+              if (trimmedLine.startsWith('sdns://')) {
+                // DNSCrypt format: sdns://AQcAAAAAAAAADzIxMi40Ny4yMjguNDc6NDM...
+                currentServer = trimmedLine;
+                // Extract public key from DNSCrypt server address if present
+                const parts = trimmedLine.split('sdns://')[1].split('.');
+                if (parts.length > 1) {
+                  currentPublicKey = parts[0];
+                }
+              } else if (trimmedLine.startsWith('https://')) {
+                // DoH format: https://dns.example.com/dns-query
+                currentServer = trimmedLine;
+              }
+              // Extract public key if explicitly provided
+              else if (trimmedLine.startsWith('Public key:')) {
+                currentPublicKey = trimmedLine.split(':')[1].trim();
+              }
+              // Extract provider name if available
+              else if (trimmedLine.startsWith('Provider:')) {
+                currentProvider = trimmedLine.split(':')[1].trim();
+              }
             }
           }
           
           // Add the last resolver
-          if (currentResolver) {
+          if (currentResolver && currentServer) {
+            currentResolver.server = currentServer;
+            currentResolver.publicKey = currentPublicKey;
+            currentResolver.provider = currentProvider || currentResolver.provider;
             importedResolvers.push(currentResolver);
           }
         } catch (err) {
@@ -270,15 +364,23 @@ const Resolvers = () => {
         }
       }
 
-      // Merge with existing resolvers, avoiding duplicates
-      const existingNames = new Set(resolvers.map(r => r.name));
-      const newResolvers = [
-        ...resolvers,
-        ...importedResolvers.filter(r => !existingNames.has(r.name))
-      ];
+      // Filter out resolvers without server addresses
+      const validResolvers = importedResolvers.filter(r => r.server);
 
-      setResolvers(newResolvers);
-      setSuccess(`Successfully imported ${importedResolvers.length} resolvers`);
+      setImportStatus('Testing resolvers...');
+      setImportingResolvers(validResolvers);
+
+      // Test each resolver
+      const testedResolvers = [];
+      for (let i = 0; i < validResolvers.length; i++) {
+        const resolver = validResolvers[i];
+        const testedResolver = await testResolver(resolver);
+        testedResolvers.push(testedResolver);
+        setImportProgress(((i + 1) / validResolvers.length) * 100);
+      }
+
+      setImportingResolvers(testedResolvers);
+      setImportStatus('Import complete');
     } catch (err) {
       setError('Failed to import resolvers');
       console.error('Error importing resolvers:', err);
@@ -287,18 +389,127 @@ const Resolvers = () => {
     }
   };
 
+  const handleConfirmImport = () => {
+    // Filter out resolvers with errors
+    const validResolvers = importingResolvers.filter(r => !r.error);
+
+    // Merge with existing resolvers, avoiding duplicates
+    const existingNames = new Set(resolvers.map(r => r.name));
+    const newResolvers = [
+      ...resolvers,
+      ...validResolvers.filter(r => !existingNames.has(r.name))
+    ];
+
+    setResolvers(newResolvers);
+    setSuccess(`Successfully imported ${validResolvers.length} resolvers`);
+    setImportDialogOpen(false);
+  };
+
   const handleTestLatency = async (index) => {
     try {
-      setLoading(true);
-      // TODO: Implement latency testing
+      setTestingLatency(true);
+      const resolver = resolvers[index];
+      
+      const response = await fetch(`http://localhost:3000/api/resolvers/test-latency`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          server: resolver.server,
+          protocol: resolver.protocol
+        })
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to test latency');
+      }
+      
       const newResolvers = [...resolvers];
-      newResolvers[index].latency = '50 ms'; // Placeholder
+      const newLatencyErrors = { ...latencyErrors };
+      
+      if (data.error) {
+        newResolvers[index] = {
+          ...newResolvers[index],
+          latency: 'Error'
+        };
+        newLatencyErrors[resolver.name] = data.error;
+      } else {
+        newResolvers[index] = {
+          ...newResolvers[index],
+          latency: `${data.latency} ms`
+        };
+        delete newLatencyErrors[resolver.name];
+      }
+      
       setResolvers(newResolvers);
+      setLatencyErrors(newLatencyErrors);
     } catch (err) {
       setError('Failed to test latency');
       console.error('Error testing latency:', err);
     } finally {
-      setLoading(false);
+      setTestingLatency(false);
+    }
+  };
+
+  const handleTestAllLatencies = async () => {
+    try {
+      setTestingLatency(true);
+      const newResolvers = [...resolvers];
+      const newLatencyErrors = { ...latencyErrors };
+      
+      // Test latency for each enabled resolver
+      for (let i = 0; i < newResolvers.length; i++) {
+        if (newResolvers[i].enabled) {
+          try {
+            const response = await fetch(`http://localhost:3000/api/resolvers/test-latency`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                server: newResolvers[i].server,
+                protocol: newResolvers[i].protocol
+              })
+            });
+            
+            const data = await response.json();
+            
+            if (response.ok) {
+              if (data.error) {
+                newResolvers[i] = {
+                  ...newResolvers[i],
+                  latency: 'Error'
+                };
+                newLatencyErrors[newResolvers[i].name] = data.error;
+              } else {
+                newResolvers[i] = {
+                  ...newResolvers[i],
+                  latency: `${data.latency} ms`
+                };
+                delete newLatencyErrors[newResolvers[i].name];
+              }
+            }
+          } catch (err) {
+            console.error(`Error testing latency for ${newResolvers[i].name}:`, err);
+            newResolvers[i] = {
+              ...newResolvers[i],
+              latency: 'Error'
+            };
+            newLatencyErrors[newResolvers[i].name] = err.message;
+          }
+        }
+      }
+      
+      setResolvers(newResolvers);
+      setLatencyErrors(newLatencyErrors);
+    } catch (err) {
+      setError('Failed to test latencies');
+      console.error('Error testing latencies:', err);
+    } finally {
+      setTestingLatency(false);
     }
   };
 
@@ -310,8 +521,118 @@ const Resolvers = () => {
     const matchesSearch = resolver.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          resolver.provider.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesProtocol = protocolFilter === 'all' || resolver.protocol === protocolFilter;
-    return matchesSearch && matchesProtocol;
+    const matchesFeatures = Object.entries(featureFilters).every(([feature, enabled]) => 
+      !enabled || resolver.features[feature]
+    );
+    return matchesSearch && matchesProtocol && matchesFeatures;
   });
+
+  const sortedResolvers = [...filteredResolvers].sort((a, b) => {
+    if (sortConfig.key === 'latency') {
+      const aLatency = parseInt(a.latency) || 0;
+      const bLatency = parseInt(b.latency) || 0;
+      return sortConfig.direction === 'asc' ? aLatency - bLatency : bLatency - aLatency;
+    }
+    const aValue = a[sortConfig.key]?.toLowerCase() || '';
+    const bValue = b[sortConfig.key]?.toLowerCase() || '';
+    return sortConfig.direction === 'asc' 
+      ? aValue.localeCompare(bValue)
+      : bValue.localeCompare(aValue);
+  });
+
+  const paginatedResolvers = sortedResolvers.slice(
+    page * rowsPerPage,
+    page * rowsPerPage + rowsPerPage
+  );
+
+  const handleChangePage = (event, newPage) => {
+    setPage(newPage);
+  };
+
+  const handleChangeRowsPerPage = (event) => {
+    setRowsPerPage(parseInt(event.target.value, 10));
+    setPage(0);
+  };
+
+  const handleSort = (key) => {
+    setSortConfig(prev => ({
+      key,
+      direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc'
+    }));
+  };
+
+  const handleFeatureFilterChange = (feature) => (event) => {
+    setFeatureFilters(prev => ({
+      ...prev,
+      [feature]: event.target.checked
+    }));
+    setPage(0);
+  };
+
+  const ImportDialog = () => (
+    <Dialog 
+      open={importDialogOpen} 
+      onClose={() => setImportDialogOpen(false)}
+      maxWidth="md"
+      fullWidth
+    >
+      <DialogTitle>Import Resolvers</DialogTitle>
+      <DialogContent>
+        <Box sx={{ mt: 2 }}>
+          <Typography variant="body2" color="text.secondary" gutterBottom>
+            {importStatus}
+          </Typography>
+          <LinearProgress 
+            variant="determinate" 
+            value={importProgress} 
+            sx={{ mb: 2 }}
+          />
+          <TableContainer component={Paper}>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell>Name</TableCell>
+                  <TableCell>Provider</TableCell>
+                  <TableCell>Protocol</TableCell>
+                  <TableCell>Latency</TableCell>
+                  <TableCell>Status</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {importingResolvers.map((resolver, index) => (
+                  <TableRow key={index}>
+                    <TableCell>{resolver.name}</TableCell>
+                    <TableCell>{resolver.provider}</TableCell>
+                    <TableCell>{resolver.protocol}</TableCell>
+                    <TableCell>{resolver.latency}</TableCell>
+                    <TableCell>
+                      {resolver.error ? (
+                        <Tooltip title={resolver.error}>
+                          <span style={{ color: 'error.main', cursor: 'help' }}>Error</span>
+                        </Tooltip>
+                      ) : (
+                        <span style={{ color: 'success.main' }}>OK</span>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </Box>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={() => setImportDialogOpen(false)}>Cancel</Button>
+        <Button 
+          onClick={handleConfirmImport}
+          variant="contained"
+          disabled={importingResolvers.length === 0}
+        >
+          Import Selected
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
 
   return (
     <Box sx={{ p: isMobile ? 2 : 3 }}>
@@ -337,7 +658,7 @@ const Resolvers = () => {
               <Button
                 startIcon={<CloudDownloadIcon />}
                 onClick={handleImportResolvers}
-                disabled={loading}
+                disabled={loading || testingLatency}
                 size={isMobile ? 'small' : 'medium'}
                 fullWidth={isMobile}
               >
@@ -346,7 +667,7 @@ const Resolvers = () => {
               <Button
                 startIcon={<AddIcon />}
                 onClick={handleAddResolver}
-                disabled={loading}
+                disabled={loading || testingLatency}
                 size={isMobile ? 'small' : 'medium'}
                 fullWidth={isMobile}
               >
@@ -355,17 +676,26 @@ const Resolvers = () => {
               <Button
                 startIcon={<RefreshIcon />}
                 onClick={loadResolvers}
-                disabled={loading}
+                disabled={loading || testingLatency}
                 size={isMobile ? 'small' : 'medium'}
                 fullWidth={isMobile}
               >
                 Refresh
               </Button>
               <Button
+                startIcon={<SpeedIcon />}
+                onClick={handleTestAllLatencies}
+                disabled={loading || testingLatency}
+                size={isMobile ? 'small' : 'medium'}
+                fullWidth={isMobile}
+              >
+                Test All Latencies
+              </Button>
+              <Button
                 variant="contained"
                 startIcon={<SaveIcon />}
                 onClick={handleSave}
-                disabled={loading}
+                disabled={loading || testingLatency}
                 size={isMobile ? 'small' : 'medium'}
                 fullWidth={isMobile}
               >
@@ -397,7 +727,7 @@ const Resolvers = () => {
           </Snackbar>
 
           <Grid container spacing={isMobile ? 2 : 3}>
-            <Grid item xs={12} md={6}>
+            <Grid item xs={12} md={4}>
               <TextField
                 fullWidth
                 label="Search Resolvers"
@@ -406,13 +736,13 @@ const Resolvers = () => {
                 size={isMobile ? 'small' : 'medium'}
               />
             </Grid>
-            <Grid item xs={12} md={6}>
+            <Grid item xs={12} md={4}>
               <FormControl fullWidth size={isMobile ? 'small' : 'medium'}>
-                <InputLabel>Filter</InputLabel>
+                <InputLabel>Protocol</InputLabel>
                 <Select
                   value={protocolFilter}
                   onChange={(e) => setProtocolFilter(e.target.value)}
-                  label="Filter"
+                  label="Protocol"
                 >
                   <MenuItem value="all">All</MenuItem>
                   <MenuItem value="DNSCrypt">DNSCrypt</MenuItem>
@@ -420,29 +750,82 @@ const Resolvers = () => {
                 </Select>
               </FormControl>
             </Grid>
+            <Grid item xs={12} md={4}>
+              <FormControl fullWidth size={isMobile ? 'small' : 'medium'}>
+                <InputLabel>Sort By</InputLabel>
+                <Select
+                  value={sortConfig.key}
+                  onChange={(e) => handleSort(e.target.value)}
+                  label="Sort By"
+                >
+                  <MenuItem value="name">Name</MenuItem>
+                  <MenuItem value="provider">Provider</MenuItem>
+                  <MenuItem value="protocol">Protocol</MenuItem>
+                  <MenuItem value="latency">Latency</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
           </Grid>
+
+          <Box sx={{ mt: 2, mb: 2 }}>
+            <Typography variant="subtitle2" gutterBottom>Features Filter:</Typography>
+            <Grid container spacing={1}>
+              {Object.entries(featureFilters).map(([feature, enabled]) => (
+                <Grid item key={feature}>
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={enabled}
+                        onChange={handleFeatureFilterChange(feature)}
+                        size="small"
+                      />
+                    }
+                    label={feature.charAt(0).toUpperCase() + feature.slice(1)}
+                  />
+                </Grid>
+              ))}
+            </Grid>
+          </Box>
 
           <Box sx={{ mt: 3 }}>
             <TableContainer component={Paper}>
               <Table>
                 <TableHead>
                   <TableRow>
-                    <TableCell>Name</TableCell>
-                    <TableCell>Provider</TableCell>
-                    <TableCell>Protocol</TableCell>
+                    <TableCell onClick={() => handleSort('name')} style={{ cursor: 'pointer' }}>
+                      Name {sortConfig.key === 'name' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                    </TableCell>
+                    <TableCell onClick={() => handleSort('provider')} style={{ cursor: 'pointer' }}>
+                      Provider {sortConfig.key === 'provider' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                    </TableCell>
+                    <TableCell onClick={() => handleSort('protocol')} style={{ cursor: 'pointer' }}>
+                      Protocol {sortConfig.key === 'protocol' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                    </TableCell>
                     <TableCell>Location</TableCell>
-                    <TableCell>Latency</TableCell>
+                    <TableCell onClick={() => handleSort('latency')} style={{ cursor: 'pointer' }}>
+                      Latency {sortConfig.key === 'latency' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                    </TableCell>
                     <TableCell>Actions</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {filteredResolvers.map((resolver, index) => (
+                  {paginatedResolvers.map((resolver, index) => (
                     <TableRow key={index}>
                       <TableCell>{resolver.name}</TableCell>
                       <TableCell>{resolver.provider}</TableCell>
                       <TableCell>{resolver.protocol}</TableCell>
                       <TableCell>{resolver.location}</TableCell>
-                      <TableCell>{resolver.latency}</TableCell>
+                      <TableCell>
+                        {testingLatency ? (
+                          <CircularProgress size={20} />
+                        ) : latencyErrors[resolver.name] ? (
+                          <Tooltip title={latencyErrors[resolver.name]}>
+                            <span style={{ color: 'error.main', cursor: 'help' }}>Error</span>
+                          </Tooltip>
+                        ) : (
+                          resolver.latency
+                        )}
+                      </TableCell>
                       <TableCell>
                         <IconButton onClick={() => handleToggleEnabled(index)} size="small">
                           {resolver.enabled ? <StarIcon /> : <StarBorderIcon />}
@@ -456,7 +839,11 @@ const Resolvers = () => {
                         <IconButton onClick={() => handleDeleteResolver(index)} size="small">
                           <DeleteIcon />
                         </IconButton>
-                        <IconButton onClick={() => handleTestLatency(index)} size="small">
+                        <IconButton 
+                          onClick={() => handleTestLatency(index)} 
+                          size="small"
+                          disabled={testingLatency}
+                        >
                           <SpeedIcon />
                         </IconButton>
                       </TableCell>
@@ -464,6 +851,15 @@ const Resolvers = () => {
                   ))}
                 </TableBody>
               </Table>
+              <TablePagination
+                rowsPerPageOptions={[10, 25, 50, 100]}
+                component="div"
+                count={filteredResolvers.length}
+                rowsPerPage={rowsPerPage}
+                page={page}
+                onPageChange={handleChangePage}
+                onRowsPerPageChange={handleChangeRowsPerPage}
+              />
             </TableContainer>
           </Box>
 
@@ -502,6 +898,7 @@ const Resolvers = () => {
         open={!!error}
         autoHideDuration={6000}
         onClose={() => setError('')}
+        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
       >
         <Alert severity="error" onClose={() => setError('')}>
           {error}
@@ -512,6 +909,7 @@ const Resolvers = () => {
         open={!!success}
         autoHideDuration={6000}
         onClose={() => setSuccess('')}
+        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
       >
         <Alert severity="success" onClose={() => setSuccess('')}>
           {success}
@@ -626,6 +1024,8 @@ const Resolvers = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <ImportDialog />
     </Box>
   );
 };

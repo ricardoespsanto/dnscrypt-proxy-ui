@@ -1,16 +1,27 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
+import {
+  Dashboard as DashboardIcon,
+  Dns as DnsIcon,
+  Block as BlockIcon,
+  Settings as SettingsIcon,
+  List as ListIcon,
+  Info as InfoIcon,
+  Power as PowerIcon,
+} from '@mui/icons-material';
 
 const Sidebar = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const location = useLocation();
 
-  const navItems = [
-    { path: '/', icon: 'tachometer-alt', text: 'Dashboard', color: 'text-sky-300' },
-    { path: '/resolvers', icon: 'server', text: 'Resolvers', color: 'text-green-300' },
-    { path: '/blocklists', icon: 'ban', text: 'Blocklists', color: 'text-red-300' },
-    { path: '/logs', icon: 'clipboard-list', text: 'Logs', color: 'text-yellow-300' },
-    { path: '/settings', icon: 'cog', text: 'Settings', color: 'text-purple-300' },
-    { path: '/about', icon: 'info-circle', text: 'About', color: 'text-indigo-300' },
+  const menuItems = [
+    { path: '/', icon: <DashboardIcon />, label: 'Dashboard' },
+    { path: '/resolvers', icon: <DnsIcon />, label: 'Resolvers' },
+    { path: '/blocklists', icon: <BlockIcon />, label: 'Blocklists' },
+    { path: '/settings', icon: <SettingsIcon />, label: 'Settings' },
+    { path: '/logs', icon: <ListIcon />, label: 'Logs' },
+    { path: '/service', icon: <PowerIcon />, label: 'Service' },
+    { path: '/about', icon: <InfoIcon />, label: 'About' },
   ];
 
   return (
@@ -41,14 +52,16 @@ const Sidebar = () => {
           </button>
         </div>
         <nav className="space-y-2">
-          {navItems.map((item) => (
+          {menuItems.map((item) => (
             <Link
               key={item.path}
               to={item.path}
-              className="flex items-center space-x-3 px-4 py-2.5 rounded-lg hover:bg-gray-700 transition-colors duration-150"
+              className={`flex items-center space-x-3 px-4 py-2.5 rounded-lg hover:bg-gray-700 transition-colors duration-150 ${
+                location.pathname === item.path ? 'bg-blue-50 text-blue-600' : ''
+              }`}
             >
-              <i className={`fas fa-${item.icon} sidebar-icon ${item.color}`}></i>
-              <span>{item.text}</span>
+              <span className="mr-3">{item.icon}</span>
+              {item.label}
             </Link>
           ))}
         </nav>
@@ -62,14 +75,16 @@ const Sidebar = () => {
         </div>
 
         <nav className="space-y-2">
-          {navItems.map((item) => (
+          {menuItems.map((item) => (
             <Link
               key={item.path}
               to={item.path}
-              className="flex items-center space-x-3 px-4 py-2.5 rounded-lg hover:bg-gray-700 transition-colors duration-150"
+              className={`flex items-center space-x-3 px-4 py-2.5 rounded-lg hover:bg-gray-700 transition-colors duration-150 ${
+                location.pathname === item.path ? 'bg-blue-50 text-blue-600' : ''
+              }`}
             >
-              <i className={`fas fa-${item.icon} sidebar-icon ${item.color}`}></i>
-              <span>{item.text}</span>
+              <span className="mr-3">{item.icon}</span>
+              {item.label}
             </Link>
           ))}
         </nav>

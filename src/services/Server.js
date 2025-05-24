@@ -3,6 +3,9 @@ import fs from 'fs';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+import os from 'os';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -10,6 +13,8 @@ const __dirname = path.dirname(__filename);
 const app = express();
 app.use(express.json());
 app.use(cors());
+
+const execAsync = promisify(exec);
 
 // Log file path
 const LOG_FILE_PATH = path.join(__dirname, '../../logs/dnscrypt-proxy.log');
@@ -108,6 +113,7 @@ const readSettings = () => {
         cloaking_rules: '',
         blacklist: '',
         whitelist: '',
+        blocklists: [],
         server_names: [
           'cloudflare',
           'cloudflare-ipv6',
@@ -174,6 +180,10 @@ const readSettings = () => {
         // Parse single-line string
         settings[key] = value.slice(1, -1);
       }
+      else if (value.startsWith('"') && value.endsWith('"')) {
+        // Parse double-quoted string
+        settings[key] = value.slice(1, -1);
+      }
       else if (!isNaN(value)) {
         // Parse number
         settings[key] = Number(value);
@@ -204,8 +214,13 @@ const saveSettings = (settings) => {
         tomlContent += `${key} = ${value}\n`;
       } else if (typeof value === 'number') {
         tomlContent += `${key} = ${value}\n`;
+      } else if (value.includes('\n')) {
+        // Handle multiline strings
+        tomlContent += `${key} = """\n${value}\n"""\n`;
       } else {
-        tomlContent += `${key} = "${value}"\n`;
+        // Handle single-line strings, ensuring we don't add extra quotes
+        const cleanValue = value.replace(/^["']|["']$/g, '');
+        tomlContent += `${key} = "${cleanValue}"\n`;
       }
     }
 
@@ -221,9 +236,39 @@ const saveSettings = (settings) => {
 const readResolvers = () => {
   try {
     const settings = readSettings();
+    const serverNames = settings.server_names || [];
+    const disabledServerNames = settings.disabled_server_names || [];
+
+    // Create full resolver objects with metadata
+    const resolvers = serverNames.map(name => {
+      const isDisabled = disabledServerNames.includes(name);
+      const protocol = name.includes('doh') ? 'DoH' : 'DNSCrypt';
+      const location = name.includes('ipv6') ? 'IPv6' : 'IPv4';
+      
+      // Determine features based on resolver name
+      const features = {
+        dnssec: !name.includes('nofilter'),
+        noLogs: !name.includes('nolog'),
+        noFilter: name.includes('nofilter'),
+        family: name.includes('family'),
+        adblock: name.includes('adblock'),
+        ipv6: location === 'IPv6'
+      };
+
+      return {
+        name,
+        provider: name.split('-')[0].charAt(0).toUpperCase() + name.split('-')[0].slice(1),
+        protocol,
+        location,
+        features,
+        latency: '0 ms',
+        isFavorite: false,
+        enabled: !isDisabled
+      };
+    });
+
     return {
-      server_names: settings.server_names || [],
-      disabled_server_names: settings.disabled_server_names || [],
+      resolvers,
       lb_strategy: settings.lb_strategy || 'p2',
       lb_estimator: settings.lb_estimator !== undefined ? settings.lb_estimator : true,
       lb_estimator_interval: settings.lb_estimator_interval || 300
@@ -235,18 +280,89 @@ const readResolvers = () => {
 };
 
 // Function to save resolvers to TOML file
-const saveResolvers = (resolvers) => {
+const saveResolvers = (data) => {
   try {
     const settings = readSettings();
-    settings.server_names = resolvers.server_names;
-    settings.disabled_server_names = resolvers.disabled_server_names;
-    settings.lb_strategy = resolvers.lb_strategy;
-    settings.lb_estimator = resolvers.lb_estimator;
-    settings.lb_estimator_interval = resolvers.lb_estimator_interval;
+    settings.server_names = data.resolvers.map(r => r.name);
+    settings.disabled_server_names = data.resolvers
+      .filter(r => !r.enabled)
+      .map(r => r.name);
+    settings.lb_strategy = data.lb_strategy;
+    settings.lb_estimator = data.lb_estimator;
+    settings.lb_estimator_interval = data.lb_estimator_interval;
     return saveSettings(settings);
   } catch (error) {
     console.error('Error saving resolvers:', error);
     throw error;
+  }
+};
+
+// Add new function to read metrics from log file
+const readMetrics = () => {
+  try {
+    const content = fs.readFileSync(LOG_FILE_PATH, 'utf8');
+    const lines = content.split('\n').filter(line => line.trim());
+    
+    // Initialize metrics
+    const metrics = {
+      encryptedQueries: 0,
+      blockedQueries: 0,
+      averageLatency: 0,
+      currentResolver: '',
+      serviceStatus: 'active'
+    };
+
+    // Process last 1000 lines for metrics
+    const recentLines = lines.slice(-1000);
+    
+    // Count encrypted queries (DNSCrypt and DoH)
+    metrics.encryptedQueries = recentLines.filter(line => 
+      line.includes('DNSCrypt') || line.includes('DoH')
+    ).length;
+
+    // Count blocked queries
+    metrics.blockedQueries = recentLines.filter(line => 
+      line.includes('blocked') || line.includes('filtered')
+    ).length;
+
+    // Calculate average latency
+    const latencyMatches = recentLines
+      .map(line => line.match(/latency: (\d+)ms/))
+      .filter(match => match)
+      .map(match => parseInt(match[1]));
+    
+    if (latencyMatches.length > 0) {
+      metrics.averageLatency = Math.round(
+        latencyMatches.reduce((a, b) => a + b, 0) / latencyMatches.length
+      );
+    }
+
+    // Get current resolver
+    const resolverMatch = recentLines
+      .reverse()
+      .find(line => line.includes('using server'));
+    if (resolverMatch) {
+      metrics.currentResolver = resolverMatch.split('using server')[1].trim();
+    }
+
+    // Check service status
+    const lastError = recentLines
+      .reverse()
+      .find(line => line.includes('error') || line.includes('failed'));
+    if (lastError) {
+      metrics.serviceStatus = 'error';
+    }
+
+    return metrics;
+  } catch (error) {
+    console.error('Error reading metrics:', error);
+    return {
+      encryptedQueries: 0,
+      blockedQueries: 0,
+      averageLatency: 0,
+      currentResolver: 'Unknown',
+      serviceStatus: 'error'
+    };
   }
 };
 
@@ -314,14 +430,8 @@ app.post('/api/settings', (req, res) => {
 app.get('/api/blocklists', (req, res) => {
   try {
     const settings = readSettings();
-    const blocklists = {
-      blacklist: settings.blacklist || '',
-      whitelist: settings.whitelist || '',
-      cloaking_rules: settings.cloaking_rules || '',
-      forwarding_rules: settings.forwarding_rules || '',
-      block_ipv6: settings.block_ipv6 || false
-    };
-    return res.json(blocklists);
+    const blocklists = settings.blocklists || [];
+    return res.json({ blocklists });
   } catch (error) {
     console.error('Error reading blocklists:', error);
     return res.status(500).json({ error: 'Failed to read blocklists' });
@@ -331,14 +441,10 @@ app.get('/api/blocklists', (req, res) => {
 app.post('/api/blocklists', (req, res) => {
   try {
     const settings = readSettings();
-    const { blacklist, whitelist, cloaking_rules, forwarding_rules, block_ipv6 } = req.body;
+    const { blocklists } = req.body;
     
     // Update blocklist settings
-    settings.blacklist = blacklist ? blacklist.trim() : '';
-    settings.whitelist = whitelist ? whitelist.trim() : '';
-    settings.cloaking_rules = cloaking_rules ? cloaking_rules.trim() : '';
-    settings.forwarding_rules = forwarding_rules ? forwarding_rules.trim() : '';
-    settings.block_ipv6 = block_ipv6;
+    settings.blocklists = blocklists || [];
     
     saveSettings(settings);
     return res.json({ message: 'Blocklist settings saved successfully' });
@@ -370,6 +476,217 @@ app.post('/api/resolvers', (req, res) => {
   }
 });
 
+// Add new endpoint for metrics
+app.get('/api/metrics', (req, res) => {
+  try {
+    const metrics = readMetrics();
+    return res.json(metrics);
+  } catch (error) {
+    console.error('Error fetching metrics:', error);
+    return res.status(500).json({ error: 'Failed to fetch metrics' });
+  }
+});
+
+// Function to get system metrics
+const getSystemMetrics = async () => {
+  try {
+    const [uptime, memory, cpu] = await Promise.all([
+      getUptime(),
+      getMemoryUsage(),
+      getCpuUsage(),
+    ]);
+
+    return {
+      uptime,
+      memoryUsage: memory,
+      cpuUsage: cpu,
+      activeConnections: await getActiveConnections(),
+    };
+  } catch (error) {
+    console.error('Error getting system metrics:', error);
+    return {
+      uptime: '0',
+      memoryUsage: '0 MB',
+      cpuUsage: '0%',
+      activeConnections: 0,
+    };
+  }
+};
+
+const getUptime = async () => {
+  try {
+    const { stdout } = await execAsync('uptime -p');
+    return stdout.trim();
+  } catch {
+    return '0';
+  }
+};
+
+const getMemoryUsage = () => {
+  const totalMem = os.totalmem();
+  const freeMem = os.freemem();
+  const usedMem = totalMem - freeMem;
+  return `${Math.round(usedMem / 1024 / 1024)} MB`;
+};
+
+const getCpuUsage = async () => {
+  try {
+    const { stdout } = await execAsync('top -bn1 | grep "Cpu(s)" | awk \'{print $2}\'');
+    return `${Math.round(parseFloat(stdout))}%`;
+  } catch {
+    return '0%';
+  }
+};
+
+const getActiveConnections = async () => {
+  try {
+    const { stdout } = await execAsync('netstat -an | grep :53 | grep ESTABLISHED | wc -l');
+    return parseInt(stdout.trim());
+  } catch {
+    return 0;
+  }
+};
+
+// Function to detect service management system
+const detectServiceManager = async () => {
+  try {
+    // Check for systemd
+    await execAsync('systemctl --version');
+    return 'systemd';
+  } catch {
+    try {
+      // Check for OpenRC
+      await execAsync('rc-status');
+      return 'openrc';
+    } catch {
+      try {
+        // Check for SysV init
+        await execAsync('service --version');
+        return 'sysv';
+      } catch {
+        // Check for launchd (macOS)
+        if (os.platform() === 'darwin') {
+          return 'launchd';
+        }
+        // Default to unknown
+        return 'unknown';
+      }
+    }
+  }
+};
+
+// Function to get service status based on system
+const getServiceStatus = async (serviceManager) => {
+  try {
+    switch (serviceManager) {
+      case 'systemd':
+        const { stdout: systemdStatus } = await execAsync('systemctl is-active dnscrypt-proxy');
+        return systemdStatus.trim();
+      case 'openrc':
+        const { stdout: openrcStatus } = await execAsync('rc-service dnscrypt-proxy status');
+        return openrcStatus.includes('started') ? 'active' : 'inactive';
+      case 'sysv':
+        const { stdout: sysvStatus } = await execAsync('service dnscrypt-proxy status');
+        return sysvStatus.includes('running') ? 'active' : 'inactive';
+      case 'launchd':
+        const { stdout: launchdStatus } = await execAsync('launchctl list | grep dnscrypt-proxy');
+        return launchdStatus ? 'active' : 'inactive';
+      default:
+        return 'unknown';
+    }
+  } catch (error) {
+    console.error('Error getting service status:', error);
+    return 'unknown';
+  }
+};
+
+// Function to control service based on system
+const controlService = async (serviceManager, action) => {
+  try {
+    switch (serviceManager) {
+      case 'systemd':
+        await execAsync(`sudo systemctl ${action} dnscrypt-proxy`);
+        break;
+      case 'openrc':
+        await execAsync(`sudo rc-service dnscrypt-proxy ${action}`);
+        break;
+      case 'sysv':
+        await execAsync(`sudo service dnscrypt-proxy ${action}`);
+        break;
+      case 'launchd':
+        if (action === 'start') {
+          await execAsync('sudo launchctl load /Library/LaunchDaemons/dnscrypt-proxy.plist');
+        } else if (action === 'stop') {
+          await execAsync('sudo launchctl unload /Library/LaunchDaemons/dnscrypt-proxy.plist');
+        } else if (action === 'restart') {
+          await execAsync('sudo launchctl unload /Library/LaunchDaemons/dnscrypt-proxy.plist');
+          await execAsync('sudo launchctl load /Library/LaunchDaemons/dnscrypt-proxy.plist');
+        }
+        break;
+      default:
+        throw new Error('Unsupported service manager');
+    }
+    return true;
+  } catch (error) {
+    console.error(`Error ${action}ing service:`, error);
+    throw error;
+  }
+};
+
+// Service control endpoints
+app.get('/api/service/status', async (req, res) => {
+  try {
+    const serviceManager = await detectServiceManager();
+    const status = await getServiceStatus(serviceManager);
+    const metrics = await getSystemMetrics();
+    return res.json({ 
+      status,
+      metrics,
+      serviceManager,
+      supported: serviceManager !== 'unknown'
+    });
+  } catch (error) {
+    console.error('Error getting service status:', error);
+    return res.status(500).json({ error: 'Failed to get service status' });
+  }
+});
+
+app.post('/api/service', async (req, res) => {
+  try {
+    const { action } = req.body;
+    if (!['start', 'stop', 'restart'].includes(action)) {
+      return res.status(400).json({ error: 'Invalid action' });
+    }
+
+    const serviceManager = await detectServiceManager();
+    if (serviceManager === 'unknown') {
+      return res.status(400).json({ error: 'Unsupported service manager' });
+    }
+
+    await controlService(serviceManager, action);
+    const status = await getServiceStatus(serviceManager);
+
+    return res.json({
+      message: `Service ${action} successful`,
+      status,
+      serviceManager
+    });
+  } catch (error) {
+    console.error('Error controlling service:', error);
+    return res.status(500).json({ error: 'Failed to control service' });
+  }
+});
+
+app.get('/api/service/metrics', async (req, res) => {
+  try {
+    const metrics = await getSystemMetrics();
+    return res.json(metrics);
+  } catch (error) {
+    console.error('Error getting service metrics:', error);
+    return res.status(500).json({ error: 'Failed to get service metrics' });
+  }
+});
+
 // Start server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
@@ -383,6 +700,10 @@ app.listen(PORT, () => {
   console.log('  POST   /api/resolvers');
   console.log('  GET    /api/blocklists');
   console.log('  POST   /api/blocklists');
+  console.log('  GET    /api/metrics');
+  console.log('  GET    /api/service/status');
+  console.log('  POST   /api/service');
+  console.log('  GET    /api/service/metrics');
   console.log(`Reading logs from: ${LOG_FILE_PATH}`);
   console.log(`Reading config from: ${CONFIG_FILE_PATH}`);
 });

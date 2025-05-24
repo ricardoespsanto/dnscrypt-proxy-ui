@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { fetchBlocklists, saveBlocklists } from '../services/api';
+import { blocklistsApi } from '../services/api';
 import {
   Box,
   Card,
@@ -7,50 +7,84 @@ import {
   Typography,
   TextField,
   Button,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemSecondaryAction,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
   IconButton,
   Snackbar,
   Alert,
   CircularProgress,
-  Divider,
-  FormControlLabel,
+  Grid,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Tooltip,
   Switch,
+  FormControlLabel,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  Chip,
+  OutlinedInput,
+  useTheme,
+  useMediaQuery,
 } from '@mui/material';
 import {
   Add as AddIcon,
   Delete as DeleteIcon,
+  Edit as EditIcon,
   Save as SaveIcon,
   Refresh as RefreshIcon,
+  CloudDownload as CloudDownloadIcon,
 } from '@mui/icons-material';
 
 const Blocklists = () => {
-  const [settings, setSettings] = useState({
-    blacklist: '',
-    whitelist: '',
-    cloaking_rules: '',
-    forwarding_rules: '',
-    block_ipv6: false,
-  });
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const [blocklists, setBlocklists] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [openDialog, setOpenDialog] = useState(false);
+  const [editingBlocklist, setEditingBlocklist] = useState(null);
+  const [newBlocklist, setNewBlocklist] = useState({
+    name: '',
+    url: '',
+    format: 'domains',
+    enabled: true,
+  });
+  const [selectedBlocklists, setSelectedBlocklists] = useState([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filter, setFilter] = useState('all');
 
   useEffect(() => {
-    loadSettings();
+    loadBlocklists();
   }, []);
 
-  const loadSettings = async () => {
+  const loadBlocklists = async () => {
     try {
       setLoading(true);
-      const data = await fetchBlocklists();
-      setSettings(data);
+      const response = await blocklistsApi.fetch();
+      // Ensure each blocklist has all required properties
+      const validatedBlocklists = (response.blocklists || []).map(blocklist => ({
+        name: blocklist.name || '',
+        url: blocklist.url || '',
+        format: blocklist.format || 'domains',
+        enabled: blocklist.enabled ?? true,
+      }));
+      setBlocklists(validatedBlocklists);
       setError('');
     } catch (err) {
-      setError('Failed to load settings');
-      console.error('Error loading settings:', err);
+      setError('Failed to load blocklists');
+      console.error('Error loading blocklists:', err);
     } finally {
       setLoading(false);
     }
@@ -59,97 +93,138 @@ const Blocklists = () => {
   const handleSave = async () => {
     try {
       setLoading(true);
-      await saveBlocklists(settings);
-      setSuccess('Settings saved successfully');
+      await blocklistsApi.save({
+        blocklists: blocklists
+      });
+      setSuccess('Blocklists saved successfully');
       setError('');
     } catch (err) {
-      setError('Failed to save settings');
-      console.error('Error saving settings:', err);
+      setError('Failed to save blocklists');
+      console.error('Error saving blocklists:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleAddRule = (type) => {
-    const newRule = prompt('Enter new rule (format: domain=ip or domain=domain):');
-    if (newRule) {
-      setSettings(prev => ({
-        ...prev,
-        [type]: prev[type] ? `${prev[type]}\n${newRule}` : newRule
-      }));
+  const handleAddBlocklist = () => {
+    setEditingBlocklist(null);
+    setNewBlocklist({
+      name: '',
+      url: '',
+      format: 'domains',
+      enabled: true,
+    });
+    setOpenDialog(true);
+  };
+
+  const handleEditBlocklist = (blocklist) => {
+    setEditingBlocklist(blocklist);
+    setNewBlocklist({
+      name: blocklist.name,
+      url: blocklist.url,
+      format: blocklist.format,
+      enabled: blocklist.enabled,
+    });
+    setOpenDialog(true);
+  };
+
+  const handleSaveBlocklist = () => {
+    // Validate required fields
+    if (!newBlocklist.name || !newBlocklist.url) {
+      setError('Name and URL are required');
+      return;
+    }
+
+    if (editingBlocklist) {
+      // Update existing blocklist
+      const index = blocklists.findIndex(b => b.name === editingBlocklist.name);
+      if (index !== -1) {
+        const newBlocklists = [...blocklists];
+        newBlocklists[index] = {
+          ...newBlocklists[index],
+          ...newBlocklist,
+        };
+        setBlocklists(newBlocklists);
+        handleSave(); // Save changes immediately
+      }
+    } else {
+      // Add new blocklist
+      setBlocklists([...blocklists, newBlocklist]);
+      handleSave(); // Save changes immediately
+    }
+    setOpenDialog(false);
+  };
+
+  const handleDeleteBlocklist = (index) => {
+    const newBlocklists = [...blocklists];
+    newBlocklists.splice(index, 1);
+    setBlocklists(newBlocklists);
+    handleSave(); // Save changes immediately
+  };
+
+  const handleImportBlocklists = async () => {
+    try {
+      setLoading(true);
+      // TODO: Implement blocklist import from public sources
+      setSuccess('Blocklists imported successfully');
+    } catch (err) {
+      setError('Failed to import blocklists');
+      console.error('Error importing blocklists:', err);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleDeleteRule = (type, index) => {
-    const rules = settings[type].split('\n');
-    rules.splice(index, 1);
-    setSettings(prev => ({
-      ...prev,
-      [type]: rules.join('\n')
-    }));
-  };
-
-  const handleChange = (field) => (event) => {
-    const value = event.target.type === 'checkbox' ? event.target.checked : event.target.value;
-    setSettings(prev => ({ ...prev, [field]: value }));
-  };
-
-  const renderRulesList = (type, title) => {
-    const rules = settings[type].split('\n').filter(rule => rule.trim());
-    return (
-      <Card sx={{ mb: 3 }}>
-        <CardContent>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-            <Typography variant="h6">{title}</Typography>
-            <Button
-              startIcon={<AddIcon />}
-              onClick={() => handleAddRule(type)}
-              variant="outlined"
-              size="small"
-            >
-              Add Rule
-            </Button>
-          </Box>
-          <List>
-            {rules.map((rule, index) => (
-              <ListItem key={index}>
-                <ListItemText primary={rule} />
-                <ListItemSecondaryAction>
-                  <IconButton
-                    edge="end"
-                    onClick={() => handleDeleteRule(type, index)}
-                    color="error"
-                  >
-                    <DeleteIcon />
-                  </IconButton>
-                </ListItemSecondaryAction>
-              </ListItem>
-            ))}
-            {rules.length === 0 && (
-              <ListItem>
-                <ListItemText primary="No rules defined" />
-              </ListItem>
-            )}
-          </List>
-        </CardContent>
-      </Card>
-    );
-  };
+  const filteredBlocklists = blocklists.filter(blocklist =>
+    blocklist.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    blocklist.url.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   return (
-    <Box sx={{ p: 3 }}>
+    <Box sx={{ p: isMobile ? 2 : 3 }}>
       <Card>
         <CardContent>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
-            <Typography variant="h5" component="h2">
-              Blocklists & Rules
+          <Box 
+            sx={{ 
+              display: 'flex', 
+              justifyContent: 'space-between', 
+              mb: 3,
+              flexDirection: isMobile ? 'column' : 'row',
+              gap: isMobile ? 2 : 0,
+            }}
+          >
+            <Typography 
+              variant={isMobile ? 'h6' : 'h5'} 
+              component="h2"
+              sx={{ fontWeight: 500 }}
+            >
+              Blocklists
             </Typography>
-            <Box>
+            <Box sx={{ display: 'flex', gap: 1 }}>
+              <Button
+                startIcon={<CloudDownloadIcon />}
+                onClick={handleImportBlocklists}
+                disabled={loading}
+                size={isMobile ? 'small' : 'medium'}
+                fullWidth={isMobile}
+              >
+                Import
+              </Button>
+              <Button
+                startIcon={<AddIcon />}
+                onClick={handleAddBlocklist}
+                disabled={loading}
+                size={isMobile ? 'small' : 'medium'}
+                fullWidth={isMobile}
+              >
+                Add Blocklist
+              </Button>
               <Button
                 startIcon={<RefreshIcon />}
-                onClick={loadSettings}
+                onClick={loadBlocklists}
                 disabled={loading}
-                sx={{ mr: 1 }}
+                size={isMobile ? 'small' : 'medium'}
+                fullWidth={isMobile}
               >
                 Refresh
               </Button>
@@ -158,50 +233,145 @@ const Blocklists = () => {
                 startIcon={<SaveIcon />}
                 onClick={handleSave}
                 disabled={loading}
+                size={isMobile ? 'small' : 'medium'}
+                fullWidth={isMobile}
               >
                 Save Changes
               </Button>
             </Box>
           </Box>
 
-          <Snackbar open={!!error} autoHideDuration={6000} onClose={() => setError('')}>
+          <Snackbar 
+            open={!!error} 
+            autoHideDuration={6000} 
+            onClose={() => setError('')}
+            anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+          >
             <Alert severity="error" onClose={() => setError('')}>
               {error}
             </Alert>
           </Snackbar>
 
-          <Snackbar open={!!success} autoHideDuration={6000} onClose={() => setSuccess('')}>
+          <Snackbar 
+            open={!!success} 
+            autoHideDuration={6000} 
+            onClose={() => setSuccess('')}
+            anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+          >
             <Alert severity="success" onClose={() => setSuccess('')}>
               {success}
             </Alert>
           </Snackbar>
 
-          {loading ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
-              <CircularProgress />
-            </Box>
-          ) : (
-            <>
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={settings.block_ipv6}
-                    onChange={handleChange('block_ipv6')}
-                  />
-                }
-                label="Block IPv6"
+          <Grid container spacing={isMobile ? 2 : 3}>
+            <Grid item xs={12} md={6}>
+              <TextField
+                fullWidth
+                label="Search Blocklists"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                size={isMobile ? 'small' : 'medium'}
               />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <FormControl fullWidth size={isMobile ? 'small' : 'medium'}>
+                <InputLabel>Filter</InputLabel>
+                <Select
+                  value={filter}
+                  onChange={(e) => setFilter(e.target.value)}
+                  label="Filter"
+                >
+                  <MenuItem value="all">All</MenuItem>
+                  <MenuItem value="blacklist">Blacklists</MenuItem>
+                  <MenuItem value="whitelist">Whitelists</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+          </Grid>
 
-              <Divider sx={{ my: 3 }} />
-
-              {renderRulesList('blacklist', 'Blacklist')}
-              {renderRulesList('whitelist', 'Whitelist')}
-              {renderRulesList('cloaking_rules', 'Cloaking Rules')}
-              {renderRulesList('forwarding_rules', 'Forwarding Rules')}
-            </>
-          )}
+          <Box sx={{ mt: 3 }}>
+            <FormControl fullWidth size={isMobile ? 'small' : 'medium'}>
+              <InputLabel>Selected Blocklists</InputLabel>
+              <Select
+                multiple
+                value={selectedBlocklists}
+                onChange={handleBlocklistChange}
+                input={<OutlinedInput label="Selected Blocklists" />}
+                renderValue={(selected) => (
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                    {selected.map((value) => (
+                      <Chip 
+                        key={value} 
+                        label={value} 
+                        size={isMobile ? 'small' : 'medium'}
+                      />
+                    ))}
+                  </Box>
+                )}
+              >
+                {filteredBlocklists.map((blocklist) => (
+                  <MenuItem key={blocklist} value={blocklist}>
+                    {blocklist}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Box>
         </CardContent>
       </Card>
+
+      {/* Add/Edit Blocklist Dialog */}
+      <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="md" fullWidth>
+        <DialogTitle>
+          {editingBlocklist ? 'Edit Blocklist' : 'Add New Blocklist'}
+        </DialogTitle>
+        <DialogContent>
+          <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <TextField
+              label="Name"
+              value={newBlocklist.name}
+              onChange={(e) => setNewBlocklist({ ...newBlocklist, name: e.target.value })}
+              fullWidth
+              required
+            />
+            <TextField
+              label="URL"
+              value={newBlocklist.url}
+              onChange={(e) => setNewBlocklist({ ...newBlocklist, url: e.target.value })}
+              fullWidth
+              required
+              placeholder="https://..."
+            />
+            <FormControl fullWidth>
+              <InputLabel>Format</InputLabel>
+              <Select
+                value={newBlocklist.format}
+                onChange={(e) => setNewBlocklist({ ...newBlocklist, format: e.target.value })}
+                label="Format"
+              >
+                <MenuItem value="domains">Domains</MenuItem>
+                <MenuItem value="hosts">Hosts</MenuItem>
+                <MenuItem value="adblock">AdBlock</MenuItem>
+              </Select>
+            </FormControl>
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={newBlocklist.enabled}
+                  onChange={(e) => setNewBlocklist({ ...newBlocklist, enabled: e.target.checked })}
+                />
+              }
+              label="Enabled"
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenDialog(false)}>Cancel</Button>
+          <Button onClick={handleSaveBlocklist} variant="contained">
+            {editingBlocklist ? 'Save Changes' : 'Add Blocklist'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

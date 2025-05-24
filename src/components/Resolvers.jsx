@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { fetchResolvers, saveResolvers } from '../services/api';
+import { resolversApi } from '../services/api';
 import {
   Box,
   Card,
@@ -30,6 +30,10 @@ import {
   DialogContent,
   DialogActions,
   Tooltip,
+  Chip,
+  OutlinedInput,
+  useTheme,
+  useMediaQuery,
 } from '@mui/material';
 import {
   Star as StarIcon,
@@ -45,11 +49,17 @@ import {
 } from '@mui/icons-material';
 
 const Resolvers = () => {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+
   const [searchQuery, setSearchQuery] = useState('');
   const [protocolFilter, setProtocolFilter] = useState('all');
   const [locationFilter, setLocationFilter] = useState('any');
   const [noLogsFilter, setNoLogsFilter] = useState(false);
   const [resolvers, setResolvers] = useState([]);
+  const [lbStrategy, setLbStrategy] = useState('p2');
+  const [lbEstimator, setLbEstimator] = useState(true);
+  const [lbEstimatorInterval, setLbEstimatorInterval] = useState(300);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -68,6 +78,9 @@ const Resolvers = () => {
       ipv6: false,
     },
   });
+  const [selectedResolvers, setSelectedResolvers] = useState([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filter, setFilter] = useState('all');
 
   useEffect(() => {
     loadResolvers();
@@ -76,36 +89,15 @@ const Resolvers = () => {
   const loadResolvers = async () => {
     try {
       setLoading(true);
-      const data = await fetchResolvers();
-      const resolverList = data.server_names.map(name => {
-        const isDoH = name.includes('doh');
-        const isIPv6 = name.includes('ipv6');
-        const isFamily = name.includes('family');
-        const isAdblock = name.includes('adblock');
-        
-        let provider = 'Unknown';
-        if (name.includes('cloudflare')) provider = 'Cloudflare';
-        else if (name.includes('google')) provider = 'Google';
-        else if (name.includes('quad9')) provider = 'Quad9';
-        else if (name.includes('adguard')) provider = 'AdGuard';
-        else if (name.includes('mullvad')) provider = 'Mullvad';
-        else if (name.includes('nextdns')) provider = 'NextDNS';
-
-        return {
-          name,
-          provider,
-          protocol: isDoH ? 'DoH' : 'DNSCrypt',
-          location: isIPv6 ? 'IPv6' : 'IPv4',
-          noLogs: !name.includes('nofilter'),
-          dnssec: true,
-          family: isFamily,
-          adblock: isAdblock,
-          latency: '0 ms',
-          isFavorite: false,
-          enabled: true,
-        };
-      });
-      setResolvers(resolverList);
+      const response = await resolversApi.fetch();
+      setResolvers(response.resolvers || []);
+      setLbStrategy(
+        typeof response.lb_strategy === 'string'
+          ? response.lb_strategy.replace(/^"+|"+$/g, '')
+          : 'p2'
+      );
+      setLbEstimator(response.lb_estimator !== undefined ? response.lb_estimator : true);
+      setLbEstimatorInterval(response.lb_estimator_interval || 300);
       setError('');
     } catch (err) {
       setError('Failed to load resolvers');
@@ -118,12 +110,11 @@ const Resolvers = () => {
   const handleSave = async () => {
     try {
       setLoading(true);
-      await saveResolvers({
-        server_names: resolvers.filter(r => r.enabled).map(r => r.name),
-        disabled_server_names: resolvers.filter(r => !r.enabled).map(r => r.name),
-        lb_strategy: 'p2',
-        lb_estimator: true,
-        lb_estimator_interval: 300
+      await resolversApi.save({
+        resolvers,
+        lb_strategy: lbStrategy,
+        lb_estimator: lbEstimator,
+        lb_estimator_interval: lbEstimatorInterval
       });
       setSuccess('Resolvers saved successfully');
       setError('');
@@ -135,15 +126,15 @@ const Resolvers = () => {
     }
   };
 
-  const handleToggleFavorite = (index) => {
-    const newResolvers = [...resolvers];
-    newResolvers[index].isFavorite = !newResolvers[index].isFavorite;
-    setResolvers(newResolvers);
-  };
-
   const handleToggleEnabled = (index) => {
     const newResolvers = [...resolvers];
     newResolvers[index].enabled = !newResolvers[index].enabled;
+    setResolvers(newResolvers);
+  };
+
+  const handleToggleFavorite = (index) => {
+    const newResolvers = [...resolvers];
+    newResolvers[index].isFavorite = !newResolvers[index].isFavorite;
     setResolvers(newResolvers);
   };
 
@@ -173,12 +164,7 @@ const Resolvers = () => {
       protocol: resolver.protocol,
       server: resolver.server || '',
       publicKey: resolver.publicKey || '',
-      features: {
-        dnssec: resolver.dnssec,
-        noLogs: resolver.noLogs,
-        noFilter: !resolver.noLogs,
-        ipv6: resolver.location === 'IPv6',
-      },
+      features: resolver.features,
     });
     setOpenDialog(true);
   };
@@ -219,8 +205,84 @@ const Resolvers = () => {
   const handleImportResolvers = async () => {
     try {
       setLoading(true);
-      // TODO: Implement resolver import from public sources
-      setSuccess('Resolvers imported successfully');
+      const sources = [
+        {
+          name: 'Public Resolvers',
+          url: 'https://download.dnscrypt.info/dnscrypt-resolvers/v3/public-resolvers.md',
+          minisignKey: 'RWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3'
+        },
+        {
+          name: 'OpenNIC',
+          url: 'https://download.dnscrypt.info/dnscrypt-resolvers/v3/opennic.md',
+          minisignKey: 'RWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3'
+        },
+        {
+          name: 'Parental Control',
+          url: 'https://download.dnscrypt.info/dnscrypt-resolvers/v3/parental-control.md',
+          minisignKey: 'RWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3'
+        }
+      ];
+
+      const importedResolvers = [];
+      
+      for (const source of sources) {
+        try {
+          const response = await fetch(source.url);
+          const text = await response.text();
+          
+          // Parse the markdown content to extract resolver information
+          const lines = text.split('\n');
+          let currentResolver = null;
+          
+          for (const line of lines) {
+            if (line.startsWith('## ')) {
+              // New resolver entry
+              if (currentResolver) {
+                importedResolvers.push(currentResolver);
+              }
+              const name = line.substring(3).trim();
+              currentResolver = {
+                name,
+                provider: name.split('-')[0].charAt(0).toUpperCase() + name.split('-')[0].slice(1),
+                protocol: name.includes('doh') ? 'DoH' : 'DNSCrypt',
+                location: name.includes('ipv6') ? 'IPv6' : 'IPv4',
+                features: {
+                  dnssec: !name.includes('nofilter'),
+                  noLogs: !name.includes('nolog'),
+                  noFilter: name.includes('nofilter'),
+                  family: name.includes('family'),
+                  adblock: name.includes('adblock'),
+                  ipv6: name.includes('ipv6')
+                },
+                latency: '0 ms',
+                isFavorite: false,
+                enabled: true
+              };
+            } else if (currentResolver && line.startsWith('sdns://')) {
+              currentResolver.server = line.trim();
+            } else if (currentResolver && line.startsWith('Public key:')) {
+              currentResolver.publicKey = line.split(':')[1].trim();
+            }
+          }
+          
+          // Add the last resolver
+          if (currentResolver) {
+            importedResolvers.push(currentResolver);
+          }
+        } catch (err) {
+          console.error(`Error importing from ${source.name}:`, err);
+        }
+      }
+
+      // Merge with existing resolvers, avoiding duplicates
+      const existingNames = new Set(resolvers.map(r => r.name));
+      const newResolvers = [
+        ...resolvers,
+        ...importedResolvers.filter(r => !existingNames.has(r.name))
+      ];
+
+      setResolvers(newResolvers);
+      setSuccess(`Successfully imported ${importedResolvers.length} resolvers`);
     } catch (err) {
       setError('Failed to import resolvers');
       console.error('Error importing resolvers:', err);
@@ -249,40 +311,37 @@ const Resolvers = () => {
                          resolver.provider.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesProtocol = protocolFilter === 'all' || resolver.protocol === protocolFilter;
     const matchesLocation = locationFilter === 'any' || resolver.location === locationFilter;
-    const matchesNoLogs = !noLogsFilter || resolver.noLogs;
+    const matchesNoLogs = !noLogsFilter || resolver.features.noLogs;
     return matchesSearch && matchesProtocol && matchesLocation && matchesNoLogs;
   });
 
   return (
-    <Box sx={{ p: 3 }}>
+    <Box sx={{ p: isMobile ? 2 : 3 }}>
       <Card>
         <CardContent>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
-            <Typography variant="h5" component="h2">
-              Manage Resolvers
+          <Box 
+            sx={{ 
+              display: 'flex', 
+              justifyContent: 'space-between', 
+              mb: 3,
+              flexDirection: isMobile ? 'column' : 'row',
+              gap: isMobile ? 2 : 0,
+            }}
+          >
+            <Typography 
+              variant={isMobile ? 'h6' : 'h5'} 
+              component="h2"
+              sx={{ fontWeight: 500 }}
+            >
+              Resolvers
             </Typography>
-            <Box>
-              <Button
-                startIcon={<CloudDownloadIcon />}
-                onClick={handleImportResolvers}
-                disabled={loading}
-                sx={{ mr: 1 }}
-              >
-                Import
-              </Button>
-              <Button
-                startIcon={<AddIcon />}
-                onClick={handleAddResolver}
-                disabled={loading}
-                sx={{ mr: 1 }}
-              >
-                Add Resolver
-              </Button>
+            <Box sx={{ display: 'flex', gap: 1 }}>
               <Button
                 startIcon={<RefreshIcon />}
                 onClick={loadResolvers}
                 disabled={loading}
-                sx={{ mr: 1 }}
+                size={isMobile ? 'small' : 'medium'}
+                fullWidth={isMobile}
               >
                 Refresh
               </Button>
@@ -291,242 +350,112 @@ const Resolvers = () => {
                 startIcon={<SaveIcon />}
                 onClick={handleSave}
                 disabled={loading}
+                size={isMobile ? 'small' : 'medium'}
+                fullWidth={isMobile}
               >
                 Save Changes
               </Button>
             </Box>
           </Box>
 
-          <Snackbar open={!!error} autoHideDuration={6000} onClose={() => setError('')}>
+          <Snackbar 
+            open={!!error} 
+            autoHideDuration={6000} 
+            onClose={() => setError('')}
+            anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+          >
             <Alert severity="error" onClose={() => setError('')}>
               {error}
             </Alert>
           </Snackbar>
 
-          <Snackbar open={!!success} autoHideDuration={6000} onClose={() => setSuccess('')}>
+          <Snackbar 
+            open={!!success} 
+            autoHideDuration={6000} 
+            onClose={() => setSuccess('')}
+            anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+          >
             <Alert severity="success" onClose={() => setSuccess('')}>
               {success}
             </Alert>
           </Snackbar>
 
-          <Box sx={{ mb: 3 }}>
-            <Grid container spacing={2}>
-              <Grid item xs={12} md={3}>
-                <TextField
-                  fullWidth
-                  label="Search resolvers"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search by name or provider..."
-                />
-              </Grid>
-              <Grid item xs={12} md={3}>
-                <FormControl fullWidth>
-                  <InputLabel>Protocol</InputLabel>
-                  <Select
-                    value={protocolFilter}
-                    onChange={(e) => setProtocolFilter(e.target.value)}
-                    label="Protocol"
-                  >
-                    <MenuItem value="all">All Protocols</MenuItem>
-                    <MenuItem value="DNSCrypt">DNSCrypt</MenuItem>
-                    <MenuItem value="DoH">DoH</MenuItem>
-                  </Select>
-                </FormControl>
-              </Grid>
-              <Grid item xs={12} md={3}>
-                <FormControl fullWidth>
-                  <InputLabel>Location</InputLabel>
-                  <Select
-                    value={locationFilter}
-                    onChange={(e) => setLocationFilter(e.target.value)}
-                    label="Location"
-                  >
-                    <MenuItem value="any">Any Location</MenuItem>
-                    <MenuItem value="IPv4">IPv4</MenuItem>
-                    <MenuItem value="IPv6">IPv6</MenuItem>
-                  </Select>
-                </FormControl>
-              </Grid>
-              <Grid item xs={12} md={3}>
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={noLogsFilter}
-                      onChange={(e) => setNoLogsFilter(e.target.checked)}
-                    />
-                  }
-                  label="No Logs Only"
-                />
-              </Grid>
+          <Grid container spacing={isMobile ? 2 : 3}>
+            <Grid item xs={12} md={6}>
+              <TextField
+                fullWidth
+                label="Search Resolvers"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                size={isMobile ? 'small' : 'medium'}
+              />
             </Grid>
-          </Box>
+            <Grid item xs={12} md={6}>
+              <FormControl fullWidth size={isMobile ? 'small' : 'medium'}>
+                <InputLabel>Filter</InputLabel>
+                <Select
+                  value={filter}
+                  onChange={(e) => setFilter(e.target.value)}
+                  label="Filter"
+                >
+                  <MenuItem value="all">All</MenuItem>
+                  <MenuItem value="dnscrypt">DNSCrypt</MenuItem>
+                  <MenuItem value="doh">DoH</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+          </Grid>
 
-          {loading ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
-              <CircularProgress />
-            </Box>
-          ) : (
-            <TableContainer component={Paper}>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Status</TableCell>
-                    <TableCell>Provider</TableCell>
-                    <TableCell>Name</TableCell>
-                    <TableCell>Protocol</TableCell>
-                    <TableCell>Location</TableCell>
-                    <TableCell>Features</TableCell>
-                    <TableCell>Latency</TableCell>
-                    <TableCell>Actions</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {filteredResolvers.map((resolver, index) => (
-                    <TableRow key={index}>
-                      <TableCell>
-                        <Switch
-                          checked={resolver.enabled}
-                          onChange={() => handleToggleEnabled(index)}
-                          color="primary"
-                        />
-                      </TableCell>
-                      <TableCell>{resolver.provider}</TableCell>
-                      <TableCell>{resolver.name}</TableCell>
-                      <TableCell>
-                        <Box
-                          sx={{
-                            px: 1,
-                            py: 0.5,
-                            borderRadius: 1,
-                            bgcolor: 'primary.light',
-                            color: 'primary.contrastText',
-                            display: 'inline-block',
-                          }}
-                        >
-                          {resolver.protocol}
-                        </Box>
-                      </TableCell>
-                      <TableCell>{resolver.location}</TableCell>
-                      <TableCell>
-                        <Box sx={{ display: 'flex', gap: 1 }}>
-                          {resolver.dnssec && (
-                            <Tooltip title="DNSSEC">
-                              <Box
-                                sx={{
-                                  px: 1,
-                                  py: 0.5,
-                                  borderRadius: 1,
-                                  bgcolor: 'success.light',
-                                  color: 'success.contrastText',
-                                  fontSize: '0.75rem',
-                                }}
-                              >
-                                DNSSEC
-                              </Box>
-                            </Tooltip>
-                          )}
-                          {resolver.noLogs && (
-                            <Tooltip title="No Logs">
-                              <Box
-                                sx={{
-                                  px: 1,
-                                  py: 0.5,
-                                  borderRadius: 1,
-                                  bgcolor: 'info.light',
-                                  color: 'info.contrastText',
-                                  fontSize: '0.75rem',
-                                }}
-                              >
-                                No Logs
-                              </Box>
-                            </Tooltip>
-                          )}
-                          {resolver.family && (
-                            <Tooltip title="Family Filter">
-                              <Box
-                                sx={{
-                                  px: 1,
-                                  py: 0.5,
-                                  borderRadius: 1,
-                                  bgcolor: 'warning.light',
-                                  color: 'warning.contrastText',
-                                  fontSize: '0.75rem',
-                                }}
-                              >
-                                Family
-                              </Box>
-                            </Tooltip>
-                          )}
-                          {resolver.adblock && (
-                            <Tooltip title="Ad Blocking">
-                              <Box
-                                sx={{
-                                  px: 1,
-                                  py: 0.5,
-                                  borderRadius: 1,
-                                  bgcolor: 'error.light',
-                                  color: 'error.contrastText',
-                                  fontSize: '0.75rem',
-                                }}
-                              >
-                                AdBlock
-                              </Box>
-                            </Tooltip>
-                          )}
-                        </Box>
-                      </TableCell>
-                      <TableCell>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          {resolver.latency}
-                          <Tooltip title="Test Latency">
-                            <IconButton
-                              size="small"
-                              onClick={() => handleTestLatency(index)}
-                              disabled={loading}
-                            >
-                              <SpeedIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                        </Box>
-                      </TableCell>
-                      <TableCell>
-                        <Box sx={{ display: 'flex', gap: 1 }}>
-                          <Tooltip title={resolver.isFavorite ? "Remove from favorites" : "Add to favorites"}>
-                            <IconButton
-                              size="small"
-                              onClick={() => handleToggleFavorite(index)}
-                            >
-                              {resolver.isFavorite ? <StarIcon /> : <StarBorderIcon />}
-                            </IconButton>
-                          </Tooltip>
-                          <Tooltip title="Edit">
-                            <IconButton
-                              size="small"
-                              onClick={() => handleEditResolver(resolver)}
-                            >
-                              <EditIcon />
-                            </IconButton>
-                          </Tooltip>
-                          <Tooltip title="Delete">
-                            <IconButton
-                              size="small"
-                              onClick={() => handleDeleteResolver(index)}
-                              color="error"
-                            >
-                              <DeleteIcon />
-                            </IconButton>
-                          </Tooltip>
-                        </Box>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          )}
+          <Box sx={{ mt: 3 }}>
+            <FormControl fullWidth size={isMobile ? 'small' : 'medium'}>
+              <InputLabel>Selected Resolvers</InputLabel>
+              <Select
+                multiple
+                value={selectedResolvers}
+                onChange={handleResolverChange}
+                input={<OutlinedInput label="Selected Resolvers" />}
+                renderValue={(selected) => (
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                    {selected.map((value) => (
+                      <Chip 
+                        key={value} 
+                        label={value} 
+                        size={isMobile ? 'small' : 'medium'}
+                      />
+                    ))}
+                  </Box>
+                )}
+              >
+                {filteredResolvers.map((resolver) => (
+                  <MenuItem key={resolver} value={resolver}>
+                    {resolver}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Box>
         </CardContent>
       </Card>
+
+      <Snackbar
+        open={!!error}
+        autoHideDuration={6000}
+        onClose={() => setError('')}
+      >
+        <Alert severity="error" onClose={() => setError('')}>
+          {error}
+        </Alert>
+      </Snackbar>
+
+      <Snackbar
+        open={!!success}
+        autoHideDuration={6000}
+        onClose={() => setSuccess('')}
+      >
+        <Alert severity="success" onClose={() => setSuccess('')}>
+          {success}
+        </Alert>
+      </Snackbar>
 
       {/* Add/Edit Resolver Dialog */}
       <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="md" fullWidth>

@@ -9,7 +9,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "server": "node src/services/Server.js",
-    "start": "node src/services/Server.js",
+    "start": "concurrently \"npm run server\" \"npm run dev\"",
     "format": "prettier --write \"src/**/*.{js,jsx,css,md}\"",
     "test": "vitest",
     "setup": "node scripts/setup-config.js"

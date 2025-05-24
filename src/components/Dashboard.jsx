@@ -1,59 +1,260 @@
-import { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import {
+  Box,
+  Card,
+  CardContent,
+  Typography,
+  Grid,
+  Alert,
+  Divider,
+  useTheme,
+  useMediaQuery,
+} from '@mui/material';
+import {
+  Security as SecurityIcon,
+  Block as BlockIcon,
+  Speed as SpeedIcon,
+  Dns as DnsIcon,
+} from '@mui/icons-material';
+import { metricsApi } from '../services/api';
 
 const Dashboard = () => {
-  const [serviceEnabled, setServiceEnabled] = useState(true);
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+
+  const [metrics, setMetrics] = useState({
+    encryptedQueries: 0,
+    blockedQueries: 0,
+    averageLatency: 0,
+    currentResolver: '',
+  });
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    loadMetrics();
+    const interval = setInterval(loadMetrics, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const loadMetrics = async () => {
+    try {
+      const response = await metricsApi.fetch();
+      setMetrics(response);
+      setError('');
+    } catch (err) {
+      setError('Failed to load metrics');
+      console.error('Error loading metrics:', err);
+    }
+  };
+
+  if (error) {
+    return (
+      <Box 
+        display="flex" 
+        justifyContent="center" 
+        alignItems="center" 
+        minHeight="400px"
+        p={2}
+      >
+        <Alert severity="error" sx={{ mb: 2, width: '100%', maxWidth: 600 }}>
+          {error}
+        </Alert>
+      </Box>
+    );
+  }
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-3xl font-semibold text-gray-700">Dashboard</h1>
-      
-      <div className="bg-white p-6 rounded-xl shadow-lg">
-        <h2 className="text-xl font-semibold mb-4 text-gray-600">Service Status</h2>
-        <div className="flex items-center space-x-4">
-          <div className={`w-8 h-8 rounded-full ${serviceEnabled ? 'bg-green-500' : 'bg-red-500'} animate-pulse`}></div>
-          <div>
-            <p className="text-lg font-medium">
-              dnscrypt-proxy is {serviceEnabled ? 'Active' : 'Inactive'}
-            </p>
-            <p className="text-sm text-gray-500">Current Resolver: Cloudflare (DoH)</p>
-          </div>
-        </div>
-        <div className="mt-6 space-x-3">
-          <button
-            onClick={() => setServiceEnabled(!serviceEnabled)}
-            className={`${
-              serviceEnabled
-                ? 'bg-red-500 hover:bg-red-600'
-                : 'bg-green-500 hover:bg-green-600'
-            } text-white font-semibold py-2 px-4 rounded-lg shadow-md transition-colors duration-150`}
+    <Box p={isMobile ? 2 : 3}>
+      {/* Metrics */}
+      <Grid container spacing={isMobile ? 2 : 3}>
+        <Grid item xs={12} md={4}>
+          <Card 
+            sx={{ 
+              height: '100%',
+              transition: 'transform 0.2s',
+              '&:hover': {
+                transform: 'translateY(-4px)',
+                boxShadow: theme.shadows[4],
+              },
+            }}
           >
-            <i className={`fas fa-${serviceEnabled ? 'stop' : 'play'}-circle mr-2`}></i>
-            {serviceEnabled ? 'Disable' : 'Enable'} Service
-          </button>
-          <button className="bg-sky-500 hover:bg-sky-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition-colors duration-150">
-            <i className="fas fa-redo mr-2"></i>Restart Service
-          </button>
-        </div>
-      </div>
+            <CardContent>
+              <Box 
+                display="flex" 
+                alignItems="center" 
+                mb={2}
+                flexDirection={isMobile ? 'column' : 'row'}
+                textAlign={isMobile ? 'center' : 'left'}
+              >
+                <SecurityIcon 
+                  color="primary" 
+                  sx={{ 
+                    fontSize: isMobile ? 32 : 40, 
+                    mr: isMobile ? 0 : 2,
+                    mb: isMobile ? 1 : 0,
+                  }} 
+                />
+                <Typography 
+                  variant={isMobile ? 'subtitle1' : 'h6'}
+                  sx={{ fontWeight: 500 }}
+                >
+                  Encrypted Queries
+                </Typography>
+              </Box>
+              <Typography 
+                variant={isMobile ? 'h4' : 'h3'} 
+                color="primary" 
+                sx={{ 
+                  fontWeight: 'bold',
+                  textAlign: isMobile ? 'center' : 'left',
+                }}
+              >
+                {metrics.encryptedQueries.toLocaleString()}
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+        <Grid item xs={12} md={4}>
+          <Card 
+            sx={{ 
+              height: '100%',
+              transition: 'transform 0.2s',
+              '&:hover': {
+                transform: 'translateY(-4px)',
+                boxShadow: theme.shadows[4],
+              },
+            }}
+          >
+            <CardContent>
+              <Box 
+                display="flex" 
+                alignItems="center" 
+                mb={2}
+                flexDirection={isMobile ? 'column' : 'row'}
+                textAlign={isMobile ? 'center' : 'left'}
+              >
+                <BlockIcon 
+                  color="error" 
+                  sx={{ 
+                    fontSize: isMobile ? 32 : 40, 
+                    mr: isMobile ? 0 : 2,
+                    mb: isMobile ? 1 : 0,
+                  }} 
+                />
+                <Typography 
+                  variant={isMobile ? 'subtitle1' : 'h6'}
+                  sx={{ fontWeight: 500 }}
+                >
+                  Blocked Queries
+                </Typography>
+              </Box>
+              <Typography 
+                variant={isMobile ? 'h4' : 'h3'} 
+                color="error" 
+                sx={{ 
+                  fontWeight: 'bold',
+                  textAlign: isMobile ? 'center' : 'left',
+                }}
+              >
+                {metrics.blockedQueries.toLocaleString()}
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+        <Grid item xs={12} md={4}>
+          <Card 
+            sx={{ 
+              height: '100%',
+              transition: 'transform 0.2s',
+              '&:hover': {
+                transform: 'translateY(-4px)',
+                boxShadow: theme.shadows[4],
+              },
+            }}
+          >
+            <CardContent>
+              <Box 
+                display="flex" 
+                alignItems="center" 
+                mb={2}
+                flexDirection={isMobile ? 'column' : 'row'}
+                textAlign={isMobile ? 'center' : 'left'}
+              >
+                <SpeedIcon 
+                  color="info" 
+                  sx={{ 
+                    fontSize: isMobile ? 32 : 40, 
+                    mr: isMobile ? 0 : 2,
+                    mb: isMobile ? 1 : 0,
+                  }} 
+                />
+                <Typography 
+                  variant={isMobile ? 'subtitle1' : 'h6'}
+                  sx={{ fontWeight: 500 }}
+                >
+                  Average Latency
+                </Typography>
+              </Box>
+              <Typography 
+                variant={isMobile ? 'h4' : 'h3'} 
+                color="info" 
+                sx={{ 
+                  fontWeight: 'bold',
+                  textAlign: isMobile ? 'center' : 'left',
+                }}
+              >
+                {metrics.averageLatency}ms
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        <div className="bg-white p-6 rounded-xl shadow-lg">
-          <h3 className="text-lg font-semibold text-gray-500 mb-2">Encrypted Queries</h3>
-          <p className="text-3xl font-bold text-sky-500">1,234,567</p>
-          <p className="text-sm text-gray-400">Today</p>
-        </div>
-        <div className="bg-white p-6 rounded-xl shadow-lg">
-          <h3 className="text-lg font-semibold text-gray-500 mb-2">Blocked Queries</h3>
-          <p className="text-3xl font-bold text-red-500">8,765</p>
-          <p className="text-sm text-gray-400">Today (Ads & Trackers)</p>
-        </div>
-        <div className="bg-white p-6 rounded-xl shadow-lg">
-          <h3 className="text-lg font-semibold text-gray-500 mb-2">Average Latency</h3>
-          <p className="text-3xl font-bold text-green-500">25<span className="text-xl">ms</span></p>
-          <p className="text-sm text-gray-400">Current Resolver</p>
-        </div>
-      </div>
-    </div>
+      {/* Current Resolver */}
+      <Card 
+        sx={{ 
+          mt: isMobile ? 2 : 3,
+          transition: 'transform 0.2s',
+          '&:hover': {
+            transform: 'translateY(-4px)',
+            boxShadow: theme.shadows[4],
+          },
+        }}
+      >
+        <CardContent>
+          <Box 
+            display="flex" 
+            alignItems="center" 
+            mb={2}
+            flexDirection={isMobile ? 'column' : 'row'}
+            textAlign={isMobile ? 'center' : 'left'}
+          >
+            <DnsIcon 
+              color="secondary" 
+              sx={{ 
+                fontSize: isMobile ? 32 : 40, 
+                mr: isMobile ? 0 : 2,
+                mb: isMobile ? 1 : 0,
+              }} 
+            />
+            <Typography 
+              variant={isMobile ? 'subtitle1' : 'h6'}
+              sx={{ fontWeight: 500 }}
+            >
+              Current Resolver
+            </Typography>
+          </Box>
+          <Divider sx={{ mb: 2 }} />
+          <Typography 
+            variant={isMobile ? 'h6' : 'h5'} 
+            color="text.secondary"
+            sx={{ textAlign: isMobile ? 'center' : 'left' }}
+          >
+            {metrics.currentResolver || 'No resolver selected'}
+          </Typography>
+        </CardContent>
+      </Card>
+    </Box>
   );
 };
 

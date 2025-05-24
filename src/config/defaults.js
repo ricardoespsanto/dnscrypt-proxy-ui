@@ -34,6 +34,7 @@ export const DEFAULT_SETTINGS = {
   cloaking_rules: '',
   blacklist: '',
   whitelist: '',
+  blocklists: [],
   server_names: [
     'cloudflare',
     'cloudflare-ipv6',

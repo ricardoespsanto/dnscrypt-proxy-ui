@@ -1,136 +1,236 @@
-import { Box, Card, CardContent, Typography, List, ListItem, ListItemIcon, ListItemText, Divider } from '@mui/material';
+import {
+  Box,
+  Card,
+  CardContent,
+  Typography,
+  Grid,
+  useTheme,
+  useMediaQuery,
+} from '@mui/material';
 import {
   Security as SecurityIcon,
   Speed as SpeedIcon,
-  FilterList as FilterIcon,
-  Storage as StorageIcon,
-  Settings as SettingsIcon,
-  Code as CodeIcon,
+  Block as BlockIcon,
+  Dns as DnsIcon,
 } from '@mui/icons-material';
 
 const About = () => {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+
   return (
-    <Box sx={{ p: 3 }}>
+    <Box sx={{ p: isMobile ? 2 : 3 }}>
       <Card>
         <CardContent>
-          <Typography variant="h5" component="h2" gutterBottom>
+          <Typography 
+            variant={isMobile ? 'h6' : 'h5'} 
+            component="h2" 
+            gutterBottom
+            sx={{ fontWeight: 500 }}
+          >
             About DNSCrypt-Proxy UI
           </Typography>
-          
-          <Typography variant="body1" paragraph>
-            DNSCrypt-Proxy UI is a modern web interface for managing DNSCrypt-Proxy, a flexible DNS proxy with support for encrypted DNS protocols including DNSCrypt v2, DNS-over-HTTPS, and Anonymized DNSCrypt.
+
+          <Typography 
+            variant="body1" 
+            color="text.secondary" 
+            paragraph
+            sx={{ mb: 4 }}
+          >
+            A modern web interface for managing DNSCrypt-Proxy, providing an easy way to configure and monitor your DNS encryption settings.
           </Typography>
 
-          <Typography variant="h6" gutterBottom sx={{ mt: 3 }}>
+          <Typography 
+            variant={isMobile ? 'subtitle1' : 'h6'} 
+            gutterBottom
+            sx={{ fontWeight: 500, mb: 2 }}
+          >
             Key Features
           </Typography>
-          
-          <List>
-            <ListItem>
-              <ListItemIcon>
-                <SecurityIcon color="primary" />
-              </ListItemIcon>
-              <ListItemText 
-                primary="Enhanced Security"
-                secondary="Support for DNSCrypt v2, DNS-over-HTTPS, and Anonymized DNSCrypt protocols"
-              />
-            </ListItem>
 
-            <ListItem>
-              <ListItemIcon>
-                <SpeedIcon color="primary" />
-              </ListItemIcon>
-              <ListItemText 
-                primary="Performance Optimization"
-                secondary="Load balancing, caching, and automatic server selection based on latency"
-              />
-            </ListItem>
+          <Grid container spacing={isMobile ? 2 : 3}>
+            <Grid item xs={12} sm={6} md={3}>
+              <Box 
+                sx={{ 
+                  display: 'flex', 
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  textAlign: 'center',
+                  p: 2,
+                }}
+              >
+                <SecurityIcon 
+                  color="primary" 
+                  sx={{ 
+                    fontSize: isMobile ? 40 : 48,
+                    mb: 1,
+                  }} 
+                />
+                <Typography 
+                  variant={isMobile ? 'subtitle2' : 'subtitle1'}
+                  sx={{ fontWeight: 500, mb: 1 }}
+                >
+                  DNS Encryption
+                </Typography>
+                <Typography 
+                  variant="body2" 
+                  color="text.secondary"
+                >
+                  Secure your DNS queries with DNSCrypt and DoH protocols
+                </Typography>
+              </Box>
+            </Grid>
 
-            <ListItem>
-              <ListItemIcon>
-                <FilterIcon color="primary" />
-              </ListItemIcon>
-              <ListItemText 
-                primary="Content Filtering"
-                secondary="Built-in support for ad-blocking, malware protection, and parental controls"
-              />
-            </ListItem>
+            <Grid item xs={12} sm={6} md={3}>
+              <Box 
+                sx={{ 
+                  display: 'flex', 
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  textAlign: 'center',
+                  p: 2,
+                }}
+              >
+                <SpeedIcon 
+                  color="info" 
+                  sx={{ 
+                    fontSize: isMobile ? 40 : 48,
+                    mb: 1,
+                  }} 
+                />
+                <Typography 
+                  variant={isMobile ? 'subtitle2' : 'subtitle1'}
+                  sx={{ fontWeight: 500, mb: 1 }}
+                >
+                  Performance
+                </Typography>
+                <Typography 
+                  variant="body2" 
+                  color="text.secondary"
+                >
+                  Monitor query latency and optimize resolver selection
+                </Typography>
+              </Box>
+            </Grid>
 
-            <ListItem>
-              <ListItemIcon>
-                <StorageIcon color="primary" />
-              </ListItemIcon>
-              <ListItemText 
-                primary="Logging & Monitoring"
-                secondary="Real-time log viewing and system status monitoring"
-              />
-            </ListItem>
+            <Grid item xs={12} sm={6} md={3}>
+              <Box 
+                sx={{ 
+                  display: 'flex', 
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  textAlign: 'center',
+                  p: 2,
+                }}
+              >
+                <BlockIcon 
+                  color="error" 
+                  sx={{ 
+                    fontSize: isMobile ? 40 : 48,
+                    mb: 1,
+                  }} 
+                />
+                <Typography 
+                  variant={isMobile ? 'subtitle2' : 'subtitle1'}
+                  sx={{ fontWeight: 500, mb: 1 }}
+                >
+                  Blocking
+                </Typography>
+                <Typography 
+                  variant="body2" 
+                  color="text.secondary"
+                >
+                  Manage blocklists and filter unwanted content
+                </Typography>
+              </Box>
+            </Grid>
 
-            <ListItem>
-              <ListItemIcon>
-                <SettingsIcon color="primary" />
-              </ListItemIcon>
-              <ListItemText 
-                primary="Easy Configuration"
-                secondary="User-friendly interface for managing all DNSCrypt-Proxy settings"
-              />
-            </ListItem>
-          </List>
+            <Grid item xs={12} sm={6} md={3}>
+              <Box 
+                sx={{ 
+                  display: 'flex', 
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  textAlign: 'center',
+                  p: 2,
+                }}
+              >
+                <DnsIcon 
+                  color="secondary" 
+                  sx={{ 
+                    fontSize: isMobile ? 40 : 48,
+                    mb: 1,
+                  }} 
+                />
+                <Typography 
+                  variant={isMobile ? 'subtitle2' : 'subtitle1'}
+                  sx={{ fontWeight: 500, mb: 1 }}
+                >
+                  Resolvers
+                </Typography>
+                <Typography 
+                  variant="body2" 
+                  color="text.secondary"
+                >
+                  Choose from a wide range of trusted DNS resolvers
+                </Typography>
+              </Box>
+            </Grid>
+          </Grid>
 
-          <Divider sx={{ my: 3 }} />
-
-          <Typography variant="h6" gutterBottom>
+          <Typography 
+            variant={isMobile ? 'subtitle1' : 'h6'} 
+            gutterBottom
+            sx={{ 
+              fontWeight: 500, 
+              mt: 4, 
+              mb: 2 
+            }}
+          >
             Supported Resolvers
           </Typography>
-          
-          <Typography variant="body2" paragraph>
-            The application supports a wide range of DNS resolvers including:
-          </Typography>
 
-          <List dense>
-            <ListItem>
-              <ListItemIcon>
-                <CodeIcon fontSize="small" />
-              </ListItemIcon>
-              <ListItemText primary="Cloudflare" secondary="Fast and secure DNS with optional family filtering" />
-            </ListItem>
-            <ListItem>
-              <ListItemIcon>
-                <CodeIcon fontSize="small" />
-              </ListItemIcon>
-              <ListItemText primary="Google" secondary="Reliable DNS with global coverage" />
-            </ListItem>
-            <ListItem>
-              <ListItemIcon>
-                <CodeIcon fontSize="small" />
-              </ListItemIcon>
-              <ListItemText primary="Quad9" secondary="Security-focused DNS with threat blocking" />
-            </ListItem>
-            <ListItem>
-              <ListItemIcon>
-                <CodeIcon fontSize="small" />
-              </ListItemIcon>
-              <ListItemText primary="AdGuard" secondary="Privacy-focused DNS with ad blocking" />
-            </ListItem>
-            <ListItem>
-              <ListItemIcon>
-                <CodeIcon fontSize="small" />
-              </ListItemIcon>
-              <ListItemText primary="Mullvad" secondary="Privacy-focused DNS with no logging" />
-            </ListItem>
-            <ListItem>
-              <ListItemIcon>
-                <CodeIcon fontSize="small" />
-              </ListItemIcon>
-              <ListItemText primary="NextDNS" secondary="Customizable DNS with advanced filtering" />
-            </ListItem>
-          </List>
+          <Grid container spacing={isMobile ? 1 : 2}>
+            <Grid item xs={12} sm={6}>
+              <Typography 
+                variant={isMobile ? 'subtitle2' : 'subtitle1'}
+                sx={{ fontWeight: 500 }}
+              >
+                DNSCrypt
+              </Typography>
+              <Typography 
+                variant="body2" 
+                color="text.secondary"
+                paragraph
+              >
+                • Cloudflare
+                • Quad9
+                • AdGuard
+                • CleanBrowsing
+                • OpenDNS
+              </Typography>
+            </Grid>
 
-          <Divider sx={{ my: 3 }} />
-
-          <Typography variant="body2" color="text.secondary">
-            DNSCrypt-Proxy UI is built with React and Material-UI, providing a modern and responsive interface for managing your DNS settings. The application runs locally and communicates with DNSCrypt-Proxy through a secure API.
-          </Typography>
+            <Grid item xs={12} sm={6}>
+              <Typography 
+                variant={isMobile ? 'subtitle2' : 'subtitle1'}
+                sx={{ fontWeight: 500 }}
+              >
+                DNS-over-HTTPS (DoH)
+              </Typography>
+              <Typography 
+                variant="body2" 
+                color="text.secondary"
+                paragraph
+              >
+                • Google
+                • Cloudflare
+                • Quad9
+                • AdGuard
+                • CleanBrowsing
+              </Typography>
+            </Grid>
+          </Grid>
         </CardContent>
       </Card>
     </Box>

@@ -1,7 +1,28 @@
 import { useState, useEffect } from 'react';
-import { fetchLogs, clearLogs, getLogLevels } from '../services/api';
+import {
+  Box,
+  Card,
+  CardContent,
+  Typography,
+  Button,
+  Grid,
+  Alert,
+  Snackbar,
+  TextField,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  useTheme,
+  useMediaQuery,
+} from '@mui/material';
+import { Refresh as RefreshIcon } from '@mui/icons-material';
+import { logsApi } from '../services/api';
 
 const Logs = () => {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -12,7 +33,7 @@ const Logs = () => {
   const loadLogs = async () => {
     try {
       setLoading(true);
-      const data = await fetchLogs();
+      const data = await logsApi.fetch();
       setLogs(data);
       setError(null);
     } catch (err) {
@@ -40,10 +61,12 @@ const Logs = () => {
 
   const handleClearLogs = async () => {
     try {
-      await clearLogs();
+      await logsApi.clear();
       setLogs([]);
+      setError(null);
     } catch (err) {
-      setError('Failed to clear logs. Please try again.', err);
+      setError('Failed to clear logs. Please try again.');
+      console.error('Error clearing logs:', err);
     }
   };
 
@@ -55,10 +78,16 @@ const Logs = () => {
 
   const getLogLevelColor = (level) => {
     switch (level) {
+      case 'emerg':
+      case 'alert':
+      case 'crit':
+        return 'text-red-600';
       case 'error':
         return 'text-red-500';
-      case 'warning':
+      case 'warn':
         return 'text-yellow-500';
+      case 'notice':
+        return 'text-blue-400';
       case 'info':
         return 'text-blue-500';
       case 'debug':
@@ -69,88 +98,124 @@ const Logs = () => {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-semibold text-gray-700">Logs</h1>
-        <div className="flex space-x-4">
-          <button
-            onClick={handleClearLogs}
-            className="bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition-colors duration-150"
+    <Box sx={{ p: isMobile ? 2 : 3 }}>
+      <Card>
+        <CardContent>
+          <Box 
+            sx={{ 
+              display: 'flex', 
+              justifyContent: 'space-between', 
+              mb: 3,
+              flexDirection: isMobile ? 'column' : 'row',
+              gap: isMobile ? 2 : 0,
+            }}
           >
-            <i className="fas fa-trash-alt mr-2"></i>Clear Logs
-          </button>
-          <button
-            onClick={() => setAutoRefresh(!autoRefresh)}
-            className={`${
-              autoRefresh ? 'bg-green-500 hover:bg-green-600' : 'bg-gray-500 hover:bg-gray-600'
-            } text-white font-semibold py-2 px-4 rounded-lg shadow-md transition-colors duration-150`}
-          >
-            <i className={`fas fa-${autoRefresh ? 'pause' : 'play'}-circle mr-2`}></i>
-            {autoRefresh ? 'Pause Auto-refresh' : 'Start Auto-refresh'}
-          </button>
-        </div>
-      </div>
-
-      <div className="bg-white p-6 rounded-xl shadow-lg">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Filter by Level</label>
-            <select
-              value={selectedLevel}
-              onChange={(e) => setSelectedLevel(e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-transparent"
+            <Typography 
+              variant={isMobile ? 'h6' : 'h5'} 
+              component="h2"
+              sx={{ fontWeight: 500 }}
             >
-              <option value="all">All Levels</option>
-              {getLogLevels().map((level) => (
-                <option key={level} value={level}>
-                  {level.charAt(0).toUpperCase() + level.slice(1)}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Search Logs</label>
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search in logs..."
-              className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-transparent"
-            />
-          </div>
-        </div>
+              Logs
+            </Typography>
+            <Button
+              startIcon={<RefreshIcon />}
+              onClick={loadLogs}
+              disabled={loading}
+              size={isMobile ? 'small' : 'medium'}
+              fullWidth={isMobile}
+            >
+              Refresh
+            </Button>
+          </Box>
 
-        {error && (
-          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-            {error}
-          </div>
-        )}
+          <Snackbar 
+            open={!!error} 
+            autoHideDuration={6000} 
+            onClose={() => setError('')}
+            anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+          >
+            <Alert severity="error" onClose={() => setError('')}>
+              {error}
+            </Alert>
+          </Snackbar>
 
-        <div className="bg-gray-900 text-gray-100 rounded-lg p-4 font-mono text-sm overflow-x-auto">
-          {loading ? (
-            <div className="flex items-center justify-center py-8">
-              <i className="fas fa-spinner fa-spin text-2xl text-gray-400"></i>
-            </div>
-          ) : filteredLogs.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">No logs found</div>
-          ) : (
-            <div className="space-y-2">
-              {filteredLogs.map((log, index) => (
-                <div key={index} className="flex items-start space-x-4">
-                  <span className="text-gray-500 flex-shrink-0">
-                    {new Date(log.timestamp).toLocaleTimeString()}
-                  </span>
-                  <span className={`${getLogLevelColor(log.level)} font-semibold flex-shrink-0`}>
-                    [{log.level.toUpperCase()}]
-                  </span>
-                  <span className="text-gray-300">{log.message}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
+          <Grid container spacing={isMobile ? 2 : 3}>
+            <Grid item xs={12} md={6}>
+              <TextField
+                fullWidth
+                label="Search Logs"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                size={isMobile ? 'small' : 'medium'}
+              />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <FormControl fullWidth size={isMobile ? 'small' : 'medium'}>
+                <InputLabel>Filter</InputLabel>
+                <Select
+                  value={selectedLevel}
+                  onChange={(e) => setSelectedLevel(e.target.value)}
+                  label="Filter"
+                >
+                  <MenuItem value="all">All Levels</MenuItem>
+                  {logsApi.getLevels().map((level) => (
+                    <MenuItem key={level} value={level}>
+                      {level.charAt(0).toUpperCase() + level.slice(1)}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+          </Grid>
+
+          <Box 
+            sx={{ 
+              mt: 3,
+              maxHeight: '60vh',
+              overflow: 'auto',
+              bgcolor: 'background.paper',
+              borderRadius: 1,
+              p: 2,
+            }}
+          >
+            {loading ? (
+              <div className="flex items-center justify-center py-8">
+                <i className="fas fa-spinner fa-spin text-2xl text-gray-400"></i>
+              </div>
+            ) : filteredLogs.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">No logs found</div>
+            ) : (
+              <div className="space-y-2">
+                {filteredLogs.map((log, index) => (
+                  <Box
+                    key={index}
+                    sx={{
+                      py: 1,
+                      borderBottom: '1px solid',
+                      borderColor: 'divider',
+                      '&:last-child': {
+                        borderBottom: 'none',
+                      },
+                    }}
+                  >
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        color: getLogLevelColor(log.level),
+                        fontFamily: 'monospace',
+                        fontSize: isMobile ? '0.75rem' : '0.875rem',
+                      }}
+                    >
+                      {log.message}
+                    </Typography>
+                  </Box>
+                ))}
+              </div>
+            )}
+          </Box>
+        </CardContent>
+      </Card>
+    </Box>
   );
 };
 

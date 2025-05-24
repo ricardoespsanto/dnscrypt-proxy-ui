@@ -15,43 +15,60 @@ export default defineConfig({
       '/api': {
         target: 'http://localhost:3000',
         changeOrigin: true,
+        secure: false,
       },
     },
+    hmr: {
+      overlay: false
+    }
   },
   build: {
     outDir: 'dist',
     assetsDir: 'assets',
-    emptyOutDir: true,
     sourcemap: false,
-    commonjsOptions: {
-      include: [/node_modules/],
-      transformMixedEsModules: true
-    }
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ['react', 'react-dom', 'react-router-dom'],
+          mui: ['@mui/material', '@mui/icons-material'],
+        },
+      },
+    },
   },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
     },
   },
-  define: {
-    'process.env': {
-      VITE_API_URL: JSON.stringify('http://localhost:3000/api'),
-      VITE_LOG_FILE: JSON.stringify('logs/dnscrypt-proxy.log'),
-      VITE_CONFIG_DIR: JSON.stringify('config'),
-      VITE_LOG_DIR: JSON.stringify('logs'),
-    }
-  },
   optimizeDeps: {
     include: [
-      '@emotion/react',
-      '@emotion/styled',
+      'react',
+      'react-dom',
+      'react-router-dom',
       '@mui/material',
       '@mui/icons-material',
-      'react',
-      'react-dom'
     ],
+    exclude: ['@mui/material/colors'],
     esbuildOptions: {
-      target: 'es2020'
+      target: 'es2020',
+      supported: {
+        'top-level-await': true,
+      },
+      define: {
+        global: 'globalThis'
+      }
     }
+  },
+  define: {
+    'process.env': {
+      VITE_API_URL: JSON.stringify('http://localhost:3000'),
+      VITE_LOG_FILE: JSON.stringify(path.join(__dirname, 'logs/dnscrypt-proxy.log')),
+      VITE_CONFIG_DIR: JSON.stringify(path.join(__dirname, 'config')),
+      VITE_LOG_DIR: JSON.stringify(path.join(__dirname, 'logs')),
+    },
+    global: 'globalThis'
+  },
+  css: {
+    devSourcemap: false
   }
 })

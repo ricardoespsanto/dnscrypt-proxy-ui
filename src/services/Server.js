@@ -13,11 +13,22 @@ app.use(cors());
 
 // Log file path
 const LOG_FILE_PATH = path.join(__dirname, '../../logs/dnscrypt-proxy.log');
+const CONFIG_FILE_PATH = path.join(__dirname, '../../config/dnscrypt-proxy.toml');
 
-// Ensure log file exists
-if (!fs.existsSync(LOG_FILE_PATH)) {
-  fs.writeFileSync(LOG_FILE_PATH, '', 'utf8');
-}
+// Ensure directories exist
+const ensureDirectories = () => {
+  const dirs = [
+    path.dirname(LOG_FILE_PATH),
+    path.dirname(CONFIG_FILE_PATH)
+  ];
+  dirs.forEach(dir => {
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+  });
+};
+
+ensureDirectories();
 
 // Function to read logs from file
 const readLogs = () => {
@@ -28,10 +39,8 @@ const readLogs = () => {
       .filter(line => line.trim())
       .map(line => {
         try {
-          // Try to parse JSON if the line is in JSON format
           return JSON.parse(line);
         } catch {
-          // If not JSON, create a log object from the line
           const timestamp = new Date().toISOString();
           return {
             timestamp,
@@ -40,10 +49,98 @@ const readLogs = () => {
           };
         }
       })
-      .reverse(); // Most recent logs first
+      .reverse();
   } catch (error) {
     console.error('Error reading log file:', error);
     return [];
+  }
+};
+
+// Function to read settings from TOML file
+const readSettings = () => {
+  try {
+    if (!fs.existsSync(CONFIG_FILE_PATH)) {
+      // Return default settings if config file doesn't exist
+      return {
+        listen_addresses: ['127.0.0.1:53'],
+        max_clients: 250,
+        ipv4_servers: true,
+        ipv6_servers: false,
+        dnscrypt_servers: true,
+        doh_servers: true,
+        require_dnssec: false,
+        require_nolog: true,
+        require_nofilter: false,
+        disabled_server_names: [],
+        fallback_resolvers: ['9.9.9.9:53', '8.8.8.8:53'],
+        ignore_system_dns: false,
+        netprobe_timeout: 60,
+        log_level: 'info',
+        log_file: LOG_FILE_PATH,
+        block_ipv6: false,
+        cache: true,
+        cache_size: 1000,
+        cache_ttl_min: 2400,
+        cache_ttl_max: 86400,
+        forwarding_rules: '',
+        cloaking_rules: '',
+        blacklist: '',
+        whitelist: ''
+      };
+    }
+
+    const content = fs.readFileSync(CONFIG_FILE_PATH, 'utf8');
+    // Parse TOML content and convert to our settings format
+    // This is a simplified version - you might want to use a TOML parser
+    const settings = {};
+    const lines = content.split('\n');
+    
+    for (const line of lines) {
+      if (line.trim() && !line.startsWith('#')) {
+        const [key, value] = line.split('=').map(s => s.trim());
+        if (key && value) {
+          // Convert TOML values to JavaScript values
+          if (value === 'true') settings[key] = true;
+          else if (value === 'false') settings[key] = false;
+          else if (value.startsWith('[') && value.endsWith(']')) {
+            settings[key] = value.slice(1, -1).split(',').map(s => s.trim().replace(/"/g, ''));
+          }
+          else if (!isNaN(value)) settings[key] = Number(value);
+          else settings[key] = value.replace(/"/g, '');
+        }
+      }
+    }
+
+    return settings;
+  } catch (error) {
+    console.error('Error reading settings:', error);
+    throw error;
+  }
+};
+
+// Function to save settings to TOML file
+const saveSettings = (settings) => {
+  try {
+    let tomlContent = '# DNSCrypt-Proxy Configuration\n\n';
+    
+    // Convert settings to TOML format
+    for (const [key, value] of Object.entries(settings)) {
+      if (Array.isArray(value)) {
+        tomlContent += `${key} = [${value.map(v => `"${v}"`).join(', ')}]\n`;
+      } else if (typeof value === 'boolean') {
+        tomlContent += `${key} = ${value}\n`;
+      } else if (typeof value === 'number') {
+        tomlContent += `${key} = ${value}\n`;
+      } else {
+        tomlContent += `${key} = "${value}"\n`;
+      }
+    }
+
+    fs.writeFileSync(CONFIG_FILE_PATH, tomlContent);
+    return true;
+  } catch (error) {
+    console.error('Error saving settings:', error);
+    throw error;
   }
 };
 
@@ -70,22 +167,25 @@ app.delete('/api/logs', (req, res) => {
   }
 });
 
-// Settings endpoint
+// Settings endpoints
 app.get('/api/settings', (req, res) => {
   try {
-    // For demo purposes, return some sample settings
-    const settings = {
-      dnsServers: ['1.1.1.1', '8.8.8.8'],
-      blockAds: true,
-      enableDNSSEC: true,
-      logLevel: 'info',
-      cacheSize: 1000,
-      maxConcurrentQueries: 100
-    };
+    const settings = readSettings();
     return res.json(settings);
   } catch (error) {
-    console.error('Failed to read settings:', error);
+    console.error('Error reading settings:', error);
     return res.status(500).json({ error: 'Failed to read settings' });
+  }
+});
+
+app.post('/api/settings', (req, res) => {
+  try {
+    const settings = req.body;
+    saveSettings(settings);
+    return res.json({ message: 'Settings saved successfully' });
+  } catch (error) {
+    console.error('Error saving settings:', error);
+    return res.status(500).json({ error: 'Failed to save settings' });
   }
 });
 
@@ -94,8 +194,10 @@ const PORT = 3000;
 app.listen(PORT, () => {
   console.log(`API server running on http://localhost:${PORT}`);
   console.log('Available endpoints:');
-  console.log('  GET  /api/logs?limit=100');
+  console.log('  GET    /api/logs?limit=100');
   console.log('  DELETE /api/logs');
-  console.log('  GET  /api/settings');
+  console.log('  GET    /api/settings');
+  console.log('  POST   /api/settings');
   console.log(`Reading logs from: ${LOG_FILE_PATH}`);
+  console.log(`Reading config from: ${CONFIG_FILE_PATH}`);
 });

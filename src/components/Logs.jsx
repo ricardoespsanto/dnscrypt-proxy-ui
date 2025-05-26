@@ -17,9 +17,54 @@ import {
   useMediaQuery,
   FormControlLabel,
   Switch,
+  Tooltip,
 } from '@mui/material';
 import { Refresh as RefreshIcon } from '@mui/icons-material';
 import { logsApi } from '../services/api';
+
+// Define log levels and their properties
+const LOG_LEVELS = {
+  emerg: {
+    label: 'Emergency',
+    color: 'text-red-600',
+    description: 'System is unusable'
+  },
+  alert: {
+    label: 'Alert',
+    color: 'text-red-600',
+    description: 'Action must be taken immediately'
+  },
+  crit: {
+    label: 'Critical',
+    color: 'text-red-600',
+    description: 'Critical conditions'
+  },
+  error: {
+    label: 'Error',
+    color: 'text-red-500',
+    description: 'Error conditions'
+  },
+  warn: {
+    label: 'Warning',
+    color: 'text-yellow-500',
+    description: 'Warning conditions'
+  },
+  notice: {
+    label: 'Notice',
+    color: 'text-blue-400',
+    description: 'Normal but significant conditions'
+  },
+  info: {
+    label: 'Info',
+    color: 'text-blue-500',
+    description: 'Informational messages'
+  },
+  debug: {
+    label: 'Debug',
+    color: 'text-gray-500',
+    description: 'Debug-level messages'
+  }
+};
 
 const Logs = () => {
   const theme = useTheme();
@@ -79,24 +124,7 @@ const Logs = () => {
   });
 
   const getLogLevelColor = (level) => {
-    switch (level) {
-      case 'emerg':
-      case 'alert':
-      case 'crit':
-        return 'text-red-600';
-      case 'error':
-        return 'text-red-500';
-      case 'warn':
-        return 'text-yellow-500';
-      case 'notice':
-        return 'text-blue-400';
-      case 'info':
-        return 'text-blue-500';
-      case 'debug':
-        return 'text-gray-500';
-      default:
-        return 'text-gray-700';
-    }
+    return LOG_LEVELS[level]?.color || 'text-gray-700';
   };
 
   return (
@@ -181,9 +209,11 @@ const Logs = () => {
                   label="Filter"
                 >
                   <MenuItem value="all">All Levels</MenuItem>
-                  {logsApi.getLevels().map((level) => (
+                  {Object.entries(LOG_LEVELS).map(([level, { label, description }]) => (
                     <MenuItem key={level} value={level}>
-                      {level.charAt(0).toUpperCase() + level.slice(1)}
+                      <Tooltip title={description}>
+                        <span>{label}</span>
+                      </Tooltip>
                     </MenuItem>
                   ))}
                 </Select>

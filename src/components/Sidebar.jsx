@@ -17,7 +17,7 @@ const Sidebar = () => {
   const menuItems = [
     { path: '/', icon: <DashboardIcon />, label: 'Dashboard' },
     { path: '/resolvers', icon: <DnsIcon />, label: 'Resolvers' },
-    { path: '/blocklists', icon: <BlockIcon />, label: 'Blocklists' },
+    { path: '/blocklists', icon: <BlockIcon />, label: 'Denylists & Allowlists' },
     { path: '/settings', icon: <SettingsIcon />, label: 'Settings' },
     { path: '/logs', icon: <ListIcon />, label: 'Logs' },
     { path: '/service', icon: <PowerIcon />, label: 'Service' },

@@ -51,6 +51,75 @@ import {
   Save as SaveIcon,
 } from '@mui/icons-material';
 
+// Define a single source of truth for features
+const FEATURES = {
+  dnssec: {
+    label: 'DNSSEC',
+    description: 'Supports DNSSEC validation',
+    default: true
+  },
+  noLogs: {
+    label: 'No Logs',
+    description: 'Does not log queries',
+    default: true
+  },
+  noFilter: {
+    label: 'No Filter',
+    description: 'Does not filter content',
+    default: false
+  },
+  ipv6: {
+    label: 'IPv6',
+    description: 'Supports IPv6',
+    default: false
+  },
+  family: {
+    label: 'Family',
+    description: 'Family-friendly filtering',
+    default: false
+  },
+  adblock: {
+    label: 'Ad Block',
+    description: 'Blocks advertisements',
+    default: false
+  }
+};
+
+// Create default features object with default values
+const DEFAULT_FEATURES = Object.entries(FEATURES).reduce((acc, [key, { default: defaultValue }]) => {
+  acc[key] = defaultValue;
+  return acc;
+}, {});
+
+// Helper function to determine protocol from server address
+const getProtocolFromServer = (server) => {
+  if (!server) return 'DNSCrypt';
+  return server.startsWith('https://') ? 'DoH' : 'DNSCrypt';
+};
+
+// Helper function to determine features from resolver name
+const getFeaturesFromName = (name) => {
+  const features = { ...DEFAULT_FEATURES };
+  
+  // Map name patterns to features
+  const namePatterns = {
+    nofilter: 'noFilter',
+    nolog: 'noLogs',
+    family: 'family',
+    adblock: 'adblock',
+    ipv6: 'ipv6'
+  };
+
+  Object.entries(namePatterns).forEach(([pattern, feature]) => {
+    features[feature] = name.toLowerCase().includes(pattern);
+  });
+
+  // DNSSEC is enabled by default unless explicitly disabled
+  features.dnssec = !name.toLowerCase().includes('nofilter');
+
+  return features;
+};
+
 const Resolvers = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -71,25 +140,13 @@ const Resolvers = () => {
     protocol: 'DNSCrypt',
     server: '',
     publicKey: '',
-    features: {
-      dnssec: true,
-      noLogs: true,
-      noFilter: false,
-      ipv6: false,
-    },
+    features: { ...DEFAULT_FEATURES },
   });
   const [selectedResolvers, setSelectedResolvers] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(25);
-  const [featureFilters, setFeatureFilters] = useState({
-    dnssec: false,
-    noLogs: false,
-    noFilter: false,
-    ipv6: false,
-    family: false,
-    adblock: false,
-  });
+  const [featureFilters, setFeatureFilters] = useState({ ...DEFAULT_FEATURES });
   const [sortConfig, setSortConfig] = useState({
     key: 'name',
     direction: 'asc'
@@ -165,12 +222,7 @@ const Resolvers = () => {
       protocol: 'DNSCrypt',
       server: '',
       publicKey: '',
-      features: {
-        dnssec: true,
-        noLogs: true,
-        noFilter: false,
-        ipv6: false,
-      },
+      features: { ...DEFAULT_FEATURES },
     });
     setOpenDialog(true);
   };
@@ -183,7 +235,7 @@ const Resolvers = () => {
       protocol: resolver.protocol,
       server: resolver.server || '',
       publicKey: resolver.publicKey || '',
-      features: resolver.features,
+      features: { ...DEFAULT_FEATURES, ...resolver.features },
     });
     setOpenDialog(true);
   };
@@ -282,7 +334,6 @@ const Resolvers = () => {
           const response = await fetch(source.url);
           const text = await response.text();
           
-          // Parse the markdown content to extract resolver information
           const lines = text.split('\n');
           let currentResolver = null;
           let currentServer = '';
@@ -293,7 +344,6 @@ const Resolvers = () => {
             const trimmedLine = line.trim();
             
             if (trimmedLine.startsWith('## ')) {
-              // Save previous resolver if exists
               if (currentResolver) {
                 if (currentServer) {
                   currentResolver.server = currentServer;
@@ -303,21 +353,15 @@ const Resolvers = () => {
                 }
               }
               
-              // Start new resolver
               const name = trimmedLine.substring(3).trim();
+              const features = getFeaturesFromName(name);
+              const protocol = getProtocolFromServer(currentServer);
+              
               currentResolver = {
                 name,
                 provider: name.split('-')[0].charAt(0).toUpperCase() + name.split('-')[0].slice(1),
-                protocol: name.includes('doh') ? 'DoH' : 'DNSCrypt',
-                location: name.includes('ipv6') ? 'IPv6' : 'IPv4',
-                features: {
-                  dnssec: !name.includes('nofilter'),
-                  noLogs: !name.includes('nolog'),
-                  noFilter: name.includes('nofilter'),
-                  family: name.includes('family'),
-                  adblock: name.includes('adblock'),
-                  ipv6: name.includes('ipv6')
-                },
+                protocol,
+                features,
                 latency: '0 ms',
                 isFavorite: false,
                 enabled: true,
@@ -328,31 +372,22 @@ const Resolvers = () => {
               currentPublicKey = '';
               currentProvider = '';
             } else if (currentResolver) {
-              // Extract server address
               if (trimmedLine.startsWith('sdns://')) {
-                // DNSCrypt format: sdns://AQcAAAAAAAAADzIxMi40Ny4yMjguNDc6NDM...
                 currentServer = trimmedLine;
-                // Extract public key from DNSCrypt server address if present
                 const parts = trimmedLine.split('sdns://')[1].split('.');
                 if (parts.length > 1) {
                   currentPublicKey = parts[0];
                 }
               } else if (trimmedLine.startsWith('https://')) {
-                // DoH format: https://dns.example.com/dns-query
                 currentServer = trimmedLine;
-              }
-              // Extract public key if explicitly provided
-              else if (trimmedLine.startsWith('Public key:')) {
+              } else if (trimmedLine.startsWith('Public key:')) {
                 currentPublicKey = trimmedLine.split(':')[1].trim();
-              }
-              // Extract provider name if available
-              else if (trimmedLine.startsWith('Provider:')) {
+              } else if (trimmedLine.startsWith('Provider:')) {
                 currentProvider = trimmedLine.split(':')[1].trim();
               }
             }
           }
           
-          // Add the last resolver
           if (currentResolver && currentServer) {
             currentResolver.server = currentServer;
             currentResolver.publicKey = currentPublicKey;
@@ -364,13 +399,11 @@ const Resolvers = () => {
         }
       }
 
-      // Filter out resolvers without server addresses
       const validResolvers = importedResolvers.filter(r => r.server);
 
       setImportStatus('Testing resolvers...');
       setImportingResolvers(validResolvers);
 
-      // Test each resolver
       const testedResolvers = [];
       for (let i = 0; i < validResolvers.length; i++) {
         const resolver = validResolvers[i];
@@ -390,10 +423,8 @@ const Resolvers = () => {
   };
 
   const handleConfirmImport = () => {
-    // Filter out resolvers with errors
     const validResolvers = importingResolvers.filter(r => !r.error);
 
-    // Merge with existing resolvers, avoiding duplicates
     const existingNames = new Set(resolvers.map(r => r.name));
     const newResolvers = [
       ...resolvers,
@@ -460,7 +491,6 @@ const Resolvers = () => {
       const newResolvers = [...resolvers];
       const newLatencyErrors = { ...latencyErrors };
       
-      // Test latency for each enabled resolver
       for (let i = 0; i < newResolvers.length; i++) {
         if (newResolvers[i].enabled) {
           try {
@@ -770,17 +800,17 @@ const Resolvers = () => {
           <Box sx={{ mt: 2, mb: 2 }}>
             <Typography variant="subtitle2" gutterBottom>Features Filter:</Typography>
             <Grid container spacing={1}>
-              {Object.entries(featureFilters).map(([feature, enabled]) => (
+              {Object.entries(FEATURES).map(([feature, { label }]) => (
                 <Grid item key={feature}>
                   <FormControlLabel
                     control={
                       <Checkbox
-                        checked={enabled}
+                        checked={featureFilters[feature]}
                         onChange={handleFeatureFilterChange(feature)}
                         size="small"
                       />
                     }
-                    label={feature.charAt(0).toUpperCase() + feature.slice(1)}
+                    label={label}
                   />
                 </Grid>
               ))}
@@ -966,54 +996,25 @@ const Resolvers = () => {
               />
             )}
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={newResolver.features.dnssec}
-                    onChange={(e) => setNewResolver({
-                      ...newResolver,
-                      features: { ...newResolver.features, dnssec: e.target.checked }
-                    })}
-                  />
-                }
-                label="DNSSEC"
-              />
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={newResolver.features.noLogs}
-                    onChange={(e) => setNewResolver({
-                      ...newResolver,
-                      features: { ...newResolver.features, noLogs: e.target.checked }
-                    })}
-                  />
-                }
-                label="No Logs"
-              />
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={newResolver.features.noFilter}
-                    onChange={(e) => setNewResolver({
-                      ...newResolver,
-                      features: { ...newResolver.features, noFilter: e.target.checked }
-                    })}
-                  />
-                }
-                label="No Filter"
-              />
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={newResolver.features.ipv6}
-                    onChange={(e) => setNewResolver({
-                      ...newResolver,
-                      features: { ...newResolver.features, ipv6: e.target.checked }
-                    })}
-                  />
-                }
-                label="IPv6"
-              />
+              {Object.entries(FEATURES).map(([feature, { label, description }]) => (
+                <FormControlLabel
+                  key={feature}
+                  control={
+                    <Switch
+                      checked={newResolver.features[feature]}
+                      onChange={(e) => setNewResolver({
+                        ...newResolver,
+                        features: { ...newResolver.features, [feature]: e.target.checked }
+                      })}
+                    />
+                  }
+                  label={
+                    <Tooltip title={description}>
+                      <span>{label}</span>
+                    </Tooltip>
+                  }
+                />
+              ))}
             </Box>
           </Box>
         </DialogContent>

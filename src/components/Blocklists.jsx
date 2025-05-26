@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { blocklistsApi } from '../services/api';
 import {
   Box,
@@ -23,168 +23,137 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  Tooltip,
-  Switch,
-  FormControlLabel,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  Chip,
-  OutlinedInput,
   useTheme,
   useMediaQuery,
+  Tabs,
+  Tab,
 } from '@mui/material';
 import {
   Add as AddIcon,
   Delete as DeleteIcon,
-  Edit as EditIcon,
   Save as SaveIcon,
   Refresh as RefreshIcon,
-  CloudDownload as CloudDownloadIcon,
 } from '@mui/icons-material';
 
 const Blocklists = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
-  const [blocklists, setBlocklists] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
+  const [denylist, setDenylist] = useState([]);
+  const [allowlist, setAllowlist] = useState([]);
+  const [activeTab, setActiveTab] = useState('denylist');
+  const [error, setError] = useState(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState(null);
+  const [saveSuccess, setSaveSuccess] = useState(false);
   const [openDialog, setOpenDialog] = useState(false);
-  const [editingBlocklist, setEditingBlocklist] = useState(null);
-  const [newBlocklist, setNewBlocklist] = useState({
-    name: '',
-    url: '',
-    format: 'domains',
-    enabled: true,
-  });
-  const [selectedBlocklists, setSelectedBlocklists] = useState([]);
+  const [newDomain, setNewDomain] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
-  const [filter, setFilter] = useState('all');
 
-  useEffect(() => {
-    loadBlocklists();
-  }, []);
-
-  const loadBlocklists = async () => {
+  const fetchData = useCallback(async () => {
     try {
-      setLoading(true);
-      const response = await blocklistsApi.fetch();
-      // Ensure each blocklist has all required properties
-      const validatedBlocklists = (response.blocklists || []).map(blocklist => ({
-        name: blocklist.name || '',
-        url: blocklist.url || '',
-        format: blocklist.format || 'domains',
-        enabled: blocklist.enabled ?? true,
-      }));
-      setBlocklists(validatedBlocklists);
-      setError('');
-    } catch (err) {
-      setError('Failed to load blocklists');
-      console.error('Error loading blocklists:', err);
-    } finally {
-      setLoading(false);
+      setError(null);
+      
+      // Fetch lists sequentially to avoid race conditions
+      const denylistResponse = await blocklistsApi.fetch('blacklist');
+      const allowlistResponse = await blocklistsApi.fetch('whitelist');
+
+      // Update both states in a single render cycle
+      setDenylist(Array.isArray(denylistResponse.blocklists) ? denylistResponse.blocklists : []);
+      setAllowlist(Array.isArray(allowlistResponse.blocklists) ? allowlistResponse.blocklists : []);
+    } catch (error) {
+      console.error('Error fetching data:', error);
+      setError(error.message || 'Failed to fetch domain lists');
     }
-  };
+  }, []); // Empty dependency array since it doesn't depend on any props or state
+
+  // Only fetch data once when component mounts
+  useEffect(() => {
+    fetchData();
+  }, []); // Remove fetchData from dependencies since it's stable
 
   const handleSave = async () => {
     try {
-      setLoading(true);
-      await blocklistsApi.save({
-        blocklists: blocklists
-      });
-      setSuccess('Blocklists saved successfully');
-      setError('');
-    } catch (err) {
-      setError('Failed to save blocklists');
-      console.error('Error saving blocklists:', err);
+      setIsSaving(true);
+      setSaveError(null);
+      setSaveSuccess(false);
+
+      const currentList = activeTab === 'denylist' ? denylist : allowlist;
+      const apiType = activeTab === 'denylist' ? 'blacklist' : 'whitelist';
+
+      console.log(`Saving ${apiType} data:`, currentList);
+      await blocklistsApi.save({ blocklists: currentList, type: apiType });
+      
+      setSaveSuccess(true);
+      // Auto-hide success message after 3 seconds
+      setTimeout(() => setSaveSuccess(false), 3000);
+    } catch (error) {
+      console.error('Error saving data:', error);
+      setSaveError(error.message || 'Failed to save changes');
     } finally {
-      setLoading(false);
+      setIsSaving(false);
     }
   };
 
-  const handleAddBlocklist = () => {
-    setEditingBlocklist(null);
-    setNewBlocklist({
-      name: '',
-      url: '',
-      format: 'domains',
-      enabled: true,
-    });
-    setOpenDialog(true);
-  };
-
-  const handleEditBlocklist = (blocklist) => {
-    setEditingBlocklist(blocklist);
-    setNewBlocklist({
-      name: blocklist.name,
-      url: blocklist.url,
-      format: blocklist.format,
-      enabled: blocklist.enabled,
-    });
-    setOpenDialog(true);
-  };
-
-  const handleSaveBlocklist = () => {
-    // Validate required fields
-    if (!newBlocklist.name || !newBlocklist.url) {
-      setError('Name and URL are required');
+  const handleAddDomain = () => {
+    if (!newDomain.trim()) {
+      setError('Domain is required');
       return;
     }
 
-    if (editingBlocklist) {
-      // Update existing blocklist
-      const index = blocklists.findIndex(b => b.name === editingBlocklist.name);
-      if (index !== -1) {
-        const newBlocklists = [...blocklists];
-        newBlocklists[index] = {
-          ...newBlocklists[index],
-          ...newBlocklist,
-        };
-        setBlocklists(newBlocklists);
-        handleSave(); // Save changes immediately
-      }
-    } else {
-      // Add new blocklist
-      setBlocklists([...blocklists, newBlocklist]);
-      handleSave(); // Save changes immediately
+    // Basic domain validation
+    const domainRegex = /^[a-zA-Z0-9][a-zA-Z0-9-_.]*[a-zA-Z0-9]\.[a-zA-Z]{2,}$/;
+    if (!domainRegex.test(newDomain.trim())) {
+      setError('Invalid domain format. Example: example.com');
+      return;
     }
+
+    const newDomainTrimmed = newDomain.trim();
+    if (activeTab === 'denylist') {
+      const newDenylists = [...denylist, newDomainTrimmed];
+      setDenylist(newDenylists);
+      handleSave();
+    } else {
+      const newAllowlist = [...allowlist, newDomainTrimmed];
+      setAllowlist(newAllowlist);
+      handleSave();
+    }
+    setNewDomain('');
     setOpenDialog(false);
   };
 
-  const handleDeleteBlocklist = (index) => {
-    const newBlocklists = [...blocklists];
-    newBlocklists.splice(index, 1);
-    setBlocklists(newBlocklists);
-    handleSave(); // Save changes immediately
-  };
-
-  const handleBlocklistChange = (event) => {
-    setSelectedBlocklists(event.target.value);
-  };
-
-  const handleImportBlocklists = async () => {
-    try {
-      setLoading(true);
-      // TODO: Implement blocklist import from public sources
-      setSuccess('Blocklists imported successfully');
-    } catch (err) {
-      setError('Failed to import blocklists');
-      console.error('Error importing blocklists:', err);
-    } finally {
-      setLoading(false);
+  const handleDeleteDomain = (index) => {
+    if (activeTab === 'denylist') {
+      const newDenylists = [...denylist];
+      newDenylists.splice(index, 1);
+      setDenylist(newDenylists);
+      handleSave();
+    } else {
+      const newAllowlist = [...allowlist];
+      newAllowlist.splice(index, 1);
+      setAllowlist(newAllowlist);
+      handleSave();
     }
   };
 
-  const filteredBlocklists = blocklists.filter(blocklist =>
-    blocklist.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    blocklist.url.toLowerCase().includes(searchTerm.toLowerCase())
+  const handleTabChange = (event, newValue) => {
+    setActiveTab(newValue);
+  };
+
+  const currentList = activeTab === 'denylist' ? denylist : allowlist;
+  const filteredDomains = currentList.filter(domain =>
+    domain.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
-    <Box sx={{ p: isMobile ? 2 : 3 }}>
+    <div className="p-6">
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-gray-900">Domain Lists</h1>
+        <p className="mt-1 text-sm text-gray-500">
+          Manage your domain allowlist and denylist
+        </p>
+      </div>
+
       <Card>
         <CardContent>
           <Box 
@@ -201,31 +170,22 @@ const Blocklists = () => {
               component="h2"
               sx={{ fontWeight: 500 }}
             >
-              Blocklists
+              Domain Lists
             </Typography>
             <Box sx={{ display: 'flex', gap: 1 }}>
               <Button
-                startIcon={<CloudDownloadIcon />}
-                onClick={handleImportBlocklists}
-                disabled={loading}
-                size={isMobile ? 'small' : 'medium'}
-                fullWidth={isMobile}
-              >
-                Import
-              </Button>
-              <Button
                 startIcon={<AddIcon />}
-                onClick={handleAddBlocklist}
-                disabled={loading}
+                onClick={() => setOpenDialog(true)}
+                disabled={isSaving}
                 size={isMobile ? 'small' : 'medium'}
                 fullWidth={isMobile}
               >
-                Add Blocklist
+                Add Domain
               </Button>
               <Button
                 startIcon={<RefreshIcon />}
-                onClick={loadBlocklists}
-                disabled={loading}
+                onClick={fetchData}
+                disabled={isSaving}
                 size={isMobile ? 'small' : 'medium'}
                 fullWidth={isMobile}
               >
@@ -235,7 +195,7 @@ const Blocklists = () => {
                 variant="contained"
                 startIcon={<SaveIcon />}
                 onClick={handleSave}
-                disabled={loading}
+                disabled={isSaving}
                 size={isMobile ? 'small' : 'medium'}
                 fullWidth={isMobile}
               >
@@ -244,107 +204,90 @@ const Blocklists = () => {
             </Box>
           </Box>
 
-          <Snackbar 
-            open={!!error} 
-            autoHideDuration={6000} 
-            onClose={() => setError('')}
-            anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
-          >
-            <Alert severity="error" onClose={() => setError('')}>
-              {error}
-            </Alert>
-          </Snackbar>
+          {error && (
+            <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+              <div className="flex">
+                <div className="flex-shrink-0">
+                  <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div className="ml-3">
+                  <h3 className="text-sm font-medium text-red-800">Error</h3>
+                  <div className="mt-2 text-sm text-red-700">{error}</div>
+                </div>
+              </div>
+            </div>
+          )}
 
-          <Snackbar 
-            open={!!success} 
-            autoHideDuration={6000} 
-            onClose={() => setSuccess('')}
-            anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+          {saveError && (
+            <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+              <div className="flex">
+                <div className="flex-shrink-0">
+                  <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div className="ml-3">
+                  <h3 className="text-sm font-medium text-red-800">Save Error</h3>
+                  <div className="mt-2 text-sm text-red-700">{saveError}</div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {saveSuccess && (
+            <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg">
+              <div className="flex">
+                <div className="flex-shrink-0">
+                  <svg className="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div className="ml-3">
+                  <h3 className="text-sm font-medium text-green-800">Success</h3>
+                  <div className="mt-2 text-sm text-green-700">Changes saved successfully</div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <Tabs
+            value={activeTab}
+            onChange={handleTabChange}
+            sx={{ mb: 3 }}
           >
-            <Alert severity="success" onClose={() => setSuccess('')}>
-              {success}
-            </Alert>
-          </Snackbar>
+            <Tab value="denylist" label="Denylist" />
+            <Tab value="allowlist" label="Allowlist" />
+          </Tabs>
 
           <Grid container spacing={isMobile ? 2 : 3}>
-            <Grid item xs={12} md={6}>
+            <Grid item xs={12}>
               <TextField
                 fullWidth
-                label="Search Blocklists"
+                label="Search Domains"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 size={isMobile ? 'small' : 'medium'}
               />
             </Grid>
-            <Grid item xs={12} md={6}>
-              <FormControl fullWidth size={isMobile ? 'small' : 'medium'}>
-                <InputLabel>Filter</InputLabel>
-                <Select
-                  value={filter}
-                  onChange={(e) => setFilter(e.target.value)}
-                  label="Filter"
-                >
-                  <MenuItem value="all">All</MenuItem>
-                  <MenuItem value="blacklist">Blacklists</MenuItem>
-                  <MenuItem value="whitelist">Whitelists</MenuItem>
-                </Select>
-              </FormControl>
-            </Grid>
           </Grid>
-
-          <Box sx={{ mt: 3 }}>
-            <FormControl fullWidth size={isMobile ? 'small' : 'medium'}>
-              <InputLabel>Selected Blocklists</InputLabel>
-              <Select
-                multiple
-                value={selectedBlocklists}
-                onChange={handleBlocklistChange}
-                input={<OutlinedInput label="Selected Blocklists" />}
-                renderValue={(selected) => (
-                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                    {selected.map((value) => (
-                      <Chip 
-                        key={value} 
-                        label={value} 
-                        size={isMobile ? 'small' : 'medium'}
-                      />
-                    ))}
-                  </Box>
-                )}
-              >
-                {filteredBlocklists.map((blocklist) => (
-                  <MenuItem key={blocklist} value={blocklist}>
-                    {blocklist}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Box>
 
           <Box sx={{ mt: 3 }}>
             <TableContainer component={Paper}>
               <Table>
                 <TableHead>
                   <TableRow>
-                    <TableCell>Name</TableCell>
-                    <TableCell>URL</TableCell>
-                    <TableCell>Format</TableCell>
-                    <TableCell>Status</TableCell>
+                    <TableCell>Domain</TableCell>
                     <TableCell>Actions</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {filteredBlocklists.map((blocklist, index) => (
+                  {filteredDomains.map((domain, index) => (
                     <TableRow key={index}>
-                      <TableCell>{blocklist.name}</TableCell>
-                      <TableCell>{blocklist.url}</TableCell>
-                      <TableCell>{blocklist.format}</TableCell>
-                      <TableCell>{blocklist.enabled ? 'Enabled' : 'Disabled'}</TableCell>
+                      <TableCell>{domain}</TableCell>
                       <TableCell>
-                        <IconButton onClick={() => handleEditBlocklist(blocklist)} size="small">
-                          <EditIcon />
-                        </IconButton>
-                        <IconButton onClick={() => handleDeleteBlocklist(index)} size="small">
+                        <IconButton onClick={() => handleDeleteDomain(index)} size="small">
                           <DeleteIcon />
                         </IconButton>
                       </TableCell>
@@ -357,59 +300,32 @@ const Blocklists = () => {
         </CardContent>
       </Card>
 
-      {/* Add/Edit Blocklist Dialog */}
-      <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="md" fullWidth>
+      {/* Add Domain Dialog */}
+      <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="sm" fullWidth>
         <DialogTitle>
-          {editingBlocklist ? 'Edit Blocklist' : 'Add New Blocklist'}
+          Add Domain to {activeTab === 'denylist' ? 'Denylist' : 'Allowlist'}
         </DialogTitle>
         <DialogContent>
-          <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <Box sx={{ mt: 2 }}>
             <TextField
-              label="Name"
-              value={newBlocklist.name}
-              onChange={(e) => setNewBlocklist({ ...newBlocklist, name: e.target.value })}
+              label="Domain"
+              value={newDomain}
+              onChange={(e) => setNewDomain(e.target.value)}
               fullWidth
               required
-            />
-            <TextField
-              label="URL"
-              value={newBlocklist.url}
-              onChange={(e) => setNewBlocklist({ ...newBlocklist, url: e.target.value })}
-              fullWidth
-              required
-              placeholder="https://..."
-            />
-            <FormControl fullWidth>
-              <InputLabel>Format</InputLabel>
-              <Select
-                value={newBlocklist.format}
-                onChange={(e) => setNewBlocklist({ ...newBlocklist, format: e.target.value })}
-                label="Format"
-              >
-                <MenuItem value="domains">Domains</MenuItem>
-                <MenuItem value="hosts">Hosts</MenuItem>
-                <MenuItem value="adblock">AdBlock</MenuItem>
-              </Select>
-            </FormControl>
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={newBlocklist.enabled}
-                  onChange={(e) => setNewBlocklist({ ...newBlocklist, enabled: e.target.checked })}
-                />
-              }
-              label="Enabled"
+              placeholder="example.com"
+              helperText="Enter a valid domain name"
             />
           </Box>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setOpenDialog(false)}>Cancel</Button>
-          <Button onClick={handleSaveBlocklist} variant="contained">
-            {editingBlocklist ? 'Save Changes' : 'Add Blocklist'}
+          <Button onClick={handleAddDomain} variant="contained">
+            Add
           </Button>
         </DialogActions>
       </Dialog>
-    </Box>
+    </div>
   );
 };
 

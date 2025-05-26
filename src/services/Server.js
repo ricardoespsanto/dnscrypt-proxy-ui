@@ -7,7 +7,7 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import os from 'os';
 import process from 'process';
-import dns from 'dns';
+import TOML from '@iarna/toml';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -23,28 +23,9 @@ app.use(cors({
 
 const execAsync = promisify(exec);
 
-const resolve4 = promisify(dns.resolve4);
-const resolve6 = promisify(dns.resolve6);
-
 // Log file path
 const LOG_FILE_PATH = path.join(__dirname, '../../logs/dnscrypt-proxy.log');
 const CONFIG_FILE_PATH = path.join(__dirname, '../../config/dnscrypt-proxy.toml');
-
-// Serve static files from the dist directory in production
-if (process.env.NODE_ENV === 'production') {
-  const distPath = path.join(__dirname, '../../dist');
-  app.use(express.static(distPath));
-  
-  // Handle client-side routing
-  app.get('*', (req, res) => {
-    res.sendFile(path.join(distPath, 'index.html'));
-  });
-} else {
-  // In development, serve the index.html from the root
-  app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, '../../index.html'));
-  });
-}
 
 // Ensure directories exist
 const ensureDirectories = () => {
@@ -91,7 +72,6 @@ const readLogs = () => {
 const readSettings = () => {
   try {
     if (!fs.existsSync(CONFIG_FILE_PATH)) {
-      // Return default settings if config file doesn't exist
       return {
         listen_addresses: ['127.0.0.1:53'],
         max_clients: 250,
@@ -153,55 +133,14 @@ const readSettings = () => {
     }
 
     const content = fs.readFileSync(CONFIG_FILE_PATH, 'utf8');
-    const settings = {};
-    const lines = content.split('\n');
+    const settings = TOML.parse(content);
     
-    for (const line of lines) {
-      // Skip comments and empty lines
-      if (!line.trim() || line.trim().startsWith('#')) continue;
-      
-      // Split on first equals sign
-      const equalIndex = line.indexOf('=');
-      if (equalIndex === -1) continue;
-      
-      const key = line.substring(0, equalIndex).trim();
-      let value = line.substring(equalIndex + 1).trim();
-      
-      // Remove inline comments
-      const commentIndex = value.indexOf('#');
-      if (commentIndex !== -1) {
-        value = value.substring(0, commentIndex).trim();
-      }
-      
-      // Parse value based on type
-      if (value === 'true') settings[key] = true;
-      else if (value === 'false') settings[key] = false;
-      else if (value.startsWith('[') && value.endsWith(']')) {
-        // Parse array
-        const arrayContent = value.slice(1, -1);
-        settings[key] = arrayContent.split(',')
-          .map(item => item.trim().replace(/['"]/g, ''));
-      }
-      else if (value.startsWith("'''") && value.endsWith("'''")) {
-        // Parse multiline string
-        settings[key] = value.slice(3, -3);
-      }
-      else if (value.startsWith("'") && value.endsWith("'")) {
-        // Parse single-line string
-        settings[key] = value.slice(1, -1);
-      }
-      else if (value.startsWith('"') && value.endsWith('"')) {
-        // Parse double-quoted string
-        settings[key] = value.slice(1, -1);
-      }
-      else if (!isNaN(value)) {
-        // Parse number
-        settings[key] = Number(value);
-      }
-      else {
-        // Default to string
-        settings[key] = value;
-      }
+    // Ensure blocklists and whitelist are arrays
+    if (!Array.isArray(settings.blocklists)) {
+      settings.blocklists = [];
+    }
+    if (!Array.isArray(settings.whitelist)) {
+      settings.whitelist = [];
     }
 
     return settings;
@@ -214,27 +153,16 @@ const readSettings = () => {
 // Function to save settings to TOML file
 const saveSettings = (settings) => {
   try {
-    let tomlContent = '# DNSCrypt-Proxy Configuration\n\n';
-    
-    // Convert settings to TOML format
-    for (const [key, value] of Object.entries(settings)) {
-      if (Array.isArray(value)) {
-        tomlContent += `${key} = [${value.map(v => `"${v}"`).join(', ')}]\n`;
-      } else if (typeof value === 'boolean') {
-        tomlContent += `${key} = ${value}\n`;
-      } else if (typeof value === 'number') {
-        tomlContent += `${key} = ${value}\n`;
-      } else if (value.includes('\n')) {
-        // Handle multiline strings
-        tomlContent += `${key} = """\n${value}\n"""\n`;
-      } else {
-        // Handle single-line strings, ensuring we don't add extra quotes
-        const cleanValue = value.replace(/^["']|["']$/g, '');
-        tomlContent += `${key} = "${cleanValue}"\n`;
-      }
+    const tomlContent = TOML.stringify(settings);
+
+    // Ensure the config directory exists
+    const configDir = path.dirname(CONFIG_FILE_PATH);
+    if (!fs.existsSync(configDir)) {
+      fs.mkdirSync(configDir, { recursive: true });
     }
 
-    fs.writeFileSync(CONFIG_FILE_PATH, tomlContent);
+    // Write the file with proper permissions
+    fs.writeFileSync(CONFIG_FILE_PATH, tomlContent, { mode: 0o644 });
     return true;
   } catch (error) {
     console.error('Error saving settings:', error);
@@ -428,6 +356,22 @@ app.post('/api/settings', (req, res) => {
       settings.whitelist = settings.whitelist.trim();
     }
     
+    // Ensure blocklists and whitelist are arrays
+    if (!Array.isArray(settings.blocklists)) {
+      settings.blocklists = [];
+    }
+    if (!Array.isArray(settings.whitelist)) {
+      settings.whitelist = [];
+    }
+    
+    // Ensure we're not overwriting existing lists when saving the other type
+    const currentSettings = readSettings();
+    if (req.body.type === 'whitelist') {
+      settings.blocklists = currentSettings.blocklists || [];
+    } else if (req.body.type === 'blacklist') {
+      settings.whitelist = currentSettings.whitelist || [];
+    }
+    
     saveSettings(settings);
     return res.json({ message: 'Settings saved successfully' });
   } catch (error) {
@@ -436,11 +380,18 @@ app.post('/api/settings', (req, res) => {
   }
 });
 
-// Add new endpoints for blocklists
+// Update the blocklists endpoints to handle both lists
 app.get('/api/blocklists', (req, res) => {
   try {
     const settings = readSettings();
-    const blocklists = settings.blocklists || [];
+    const { type = 'blacklist' } = req.query;
+    
+    // Get the appropriate list based on type
+    const list = type === 'whitelist' ? settings.whitelist : settings.blocklists;
+    
+    // Ensure we're returning an array
+    const blocklists = Array.isArray(list) ? list : [];
+    
     return res.json({ blocklists });
   } catch (error) {
     console.error('Error reading blocklists:', error);
@@ -451,17 +402,35 @@ app.get('/api/blocklists', (req, res) => {
 app.post('/api/blocklists', (req, res) => {
   try {
     const settings = readSettings();
-    const { blocklists } = req.body;
+    const { blocklists, type = 'blacklist' } = req.body;
     
-    // Update blocklist settings
-    settings.blocklists = blocklists || [];
+    // Update the appropriate list while preserving other settings
+    const updatedSettings = {
+      ...settings,
+      [type === 'whitelist' ? 'whitelist' : 'blocklists']: blocklists || []
+    };
     
-    saveSettings(settings);
-    return res.json({ message: 'Blocklist settings saved successfully' });
+    // Ensure both lists are arrays
+    if (!Array.isArray(updatedSettings.blocklists)) {
+      updatedSettings.blocklists = [];
+    }
+    if (!Array.isArray(updatedSettings.whitelist)) {
+      updatedSettings.whitelist = [];
+    }
+    
+    saveSettings(updatedSettings);
+    return res.json({ message: `${type} settings saved successfully` });
   } catch (error) {
     console.error('Error saving blocklists:', error);
     return res.status(500).json({ error: 'Failed to save blocklists' });
   }
+});
+
+// Increase server timeout for all routes
+app.use((req, res, next) => {
+  req.setTimeout(30000); // 30 seconds
+  res.setTimeout(30000); // 30 seconds
+  next();
 });
 
 // Resolvers endpoints

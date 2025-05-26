@@ -131,23 +131,50 @@ export const resolversApi = {
 
 // Blocklist related API calls
 export const blocklistsApi = {
-  fetch: async () => {
+  fetch: async (type = 'blacklist') => {
     try {
-      const response = await api.get(endpoints.blocklists);
+      const response = await api.get(`${endpoints.blocklists}?type=${type}`);
+      
+      // Validate response data
+      if (!response.data || typeof response.data !== 'object') {
+        throw new Error(`Invalid response format for ${type}`);
+      }
+      
+      // Ensure blocklists is an array
+      if (!Array.isArray(response.data.blocklists)) {
+        response.data.blocklists = [];
+      }
+      
       return response.data;
     } catch (error) {
-      console.error('Error fetching blocklists:', error);
-      throw new Error('Failed to fetch blocklists');
+      console.error(`Error fetching ${type}:`, error);
+      throw new Error(`Failed to fetch ${type}: ${error.message}`);
     }
   },
 
-  save: async (blocklists) => {
+  save: async (data) => {
     try {
-      const response = await api.post(endpoints.blocklists, blocklists);
+      const { blocklists, type } = data;
+      
+      // Validate input data
+      if (!Array.isArray(blocklists)) {
+        throw new Error('blocklists must be an array');
+      }
+      if (!type || !['blacklist', 'whitelist'].includes(type)) {
+        throw new Error('Invalid type specified');
+      }
+      
+      const response = await api.post(endpoints.blocklists, { blocklists, type });
+      
+      // Validate response
+      if (!response.data || typeof response.data !== 'object') {
+        throw new Error('Invalid response format');
+      }
+      
       return response.data;
     } catch (error) {
       console.error('Error saving blocklists:', error);
-      throw new Error('Failed to save blocklists');
+      throw new Error(`Failed to save blocklists: ${error.message}`);
     }
   },
 };

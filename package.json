@@ -12,7 +12,8 @@
     "test": "jest",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "build:css": "tailwindcss -i ./src/index.css -o ./src/output.css --watch"
+    "build:css": "tailwindcss -i ./src/index.css -o ./src/output.css --watch",
+    "build": "vite build"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",

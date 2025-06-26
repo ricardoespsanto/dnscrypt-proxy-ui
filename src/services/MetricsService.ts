@@ -50,7 +50,7 @@ class MetricsService {
       const latencyMatches = recentLines
         .map(line => line.match(/latency: (\d+)ms/))
         .filter(match => match)
-        .map(match => parseInt(match[1]));
+        .map(match => parseInt(match![1]));
       
       if (latencyMatches.length > 0) {
         metrics.averageLatency = Math.round(

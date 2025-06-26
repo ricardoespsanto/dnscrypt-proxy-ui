@@ -1,3 +1,4 @@
+/// <reference types="react" />
 import { useState, useEffect } from 'react';
 import { resolversApi } from '../services/api.ts';
 import {
@@ -37,6 +38,7 @@ import {
   TablePagination,
   Checkbox,
   LinearProgress,
+  SelectChangeEvent,
 } from '@mui/material';
 import {
   Star as StarIcon,
@@ -51,74 +53,7 @@ import {
   Save as SaveIcon,
 } from '@mui/icons-material';
 
-// Define a single source of truth for features
-const FEATURES = {
-  dnssec: {
-    label: 'DNSSEC',
-    description: 'Supports DNSSEC validation',
-    default: true
-  },
-  noLogs: {
-    label: 'No Logs',
-    description: 'Does not log queries',
-    default: true
-  },
-  noFilter: {
-    label: 'No Filter',
-    description: 'Does not filter content',
-    default: false
-  },
-  ipv6: {
-    label: 'IPv6',
-    description: 'Supports IPv6',
-    default: false
-  },
-  family: {
-    label: 'Family',
-    description: 'Family-friendly filtering',
-    default: false
-  },
-  adblock: {
-    label: 'Ad Block',
-    description: 'Blocks advertisements',
-    default: false
-  }
-};
 
-// Create default features object with default values
-const DEFAULT_FEATURES = Object.entries(FEATURES).reduce((acc, [key, { default: defaultValue }]) => {
-  acc[key] = defaultValue;
-  return acc;
-}, {});
-
-// Helper function to determine protocol from server address
-const getProtocolFromServer = (server) => {
-  if (!server) return 'DNSCrypt';
-  return server.startsWith('https://') ? 'DoH' : 'DNSCrypt';
-};
-
-// Helper function to determine features from resolver name
-const getFeaturesFromName = (name) => {
-  const features = { ...DEFAULT_FEATURES };
-  
-  // Map name patterns to features
-  const namePatterns = {
-    nofilter: 'noFilter',
-    nolog: 'noLogs',
-    family: 'family',
-    adblock: 'adblock',
-    ipv6: 'ipv6'
-  };
-
-  Object.entries(namePatterns).forEach(([pattern, feature]) => {
-    features[feature] = name.toLowerCase().includes(pattern);
-  });
-
-  // DNSSEC is enabled by default unless explicitly disabled
-  features.dnssec = !name.toLowerCase().includes('nofilter');
-
-  return features;
-};
 
 interface FeatureConfig {
   label: string;
@@ -287,9 +222,9 @@ const Resolvers = () => {
       setLbEstimator(response.lb_estimator !== undefined ? response.lb_estimator : true);
       setLbEstimatorInterval(response.lb_estimator_interval || 300);
       setError('');
-    } catch (err) {
+    } catch (err: unknown) {
       setError('Failed to load resolvers');
-      console.error('Error loading resolvers:', err);
+      console.error('Error loading resolvers:', (err as Error));
     } finally {
       setLoading(false);
     }
@@ -306,9 +241,9 @@ const Resolvers = () => {
       });
       setSuccess('Resolvers saved successfully');
       setError('');
-    } catch (err) {
+    } catch (err: unknown) {
       setError('Failed to save resolvers');
-      console.error('Error saving resolvers:', err);
+      console.error('Error saving resolvers:', (err as Error));
     } finally {
       setLoading(false);
     }
@@ -361,7 +296,7 @@ const Resolvers = () => {
         newResolvers[index] = {
           ...newResolvers[index],
           ...newResolver,
-          location: newResolver.features.ipv6 ? 'IPv6' : 'IPv4',
+          location: (newResolver.features.ipv6 ? 'IPv6' : 'IPv4') as 'IPv4' | 'IPv6',
         };
         setResolvers(newResolvers);
       }
@@ -369,7 +304,7 @@ const Resolvers = () => {
       // Add new resolver
       const newResolverEntry = {
         ...newResolver,
-        location: newResolver.features.ipv6 ? 'IPv6' : 'IPv4',
+        location: (newResolver.features.ipv6 ? 'IPv6' : 'IPv4') as 'IPv4' | 'IPv6',
         latency: '0 ms',
         isFavorite: false,
         enabled: true,
@@ -404,11 +339,11 @@ const Resolvers = () => {
         latency: data.latency ? `${data.latency} ms` : 'Error',
         error: data.error
       };
-    } catch (err) {
+    } catch (err: unknown) {
       return {
         ...resolver,
         latency: 'Error',
-        error: err.message
+        error: (err as Error).message
       };
     }
   };
@@ -506,8 +441,8 @@ const Resolvers = () => {
             currentResolver.provider = currentProvider || currentResolver.provider;
             importedResolvers.push(currentResolver);
           }
-        } catch (err) {
-          console.error(`Error importing from ${source.name}:`, err);
+        } catch (err: unknown) {
+          console.error(`Error importing from ${source.name}:`, (err as Error));
         }
       }
 
@@ -526,9 +461,9 @@ const Resolvers = () => {
 
       setImportingResolvers(testedResolvers);
       setImportStatus('Import complete');
-    } catch (err) {
+    } catch (err: unknown) {
       setError('Failed to import resolvers');
-      console.error('Error importing resolvers:', err);
+      console.error('Error importing resolvers:', (err as Error));
     } finally {
       setLoading(false);
     }
@@ -589,9 +524,9 @@ const Resolvers = () => {
       
       setResolvers(newResolvers);
       setLatencyErrors(newLatencyErrors);
-    } catch (err) {
+    } catch (err: unknown) {
       setError('Failed to test latency');
-      console.error('Error testing latency:', err);
+      console.error('Error testing latency:', (err as Error));
     } finally {
       setTestingLatency(false);
     }
@@ -634,29 +569,29 @@ const Resolvers = () => {
                 delete newLatencyErrors[newResolvers[i].name];
               }
             }
-          } catch (err) {
-            console.error(`Error testing latency for ${newResolvers[i].name}:`, err);
+          } catch (err: unknown) {
+            console.error(`Error testing latency for ${newResolvers[i].name}:`, (err as Error));
             newResolvers[i] = {
               ...newResolvers[i],
               latency: 'Error'
             };
-            newLatencyErrors[newResolvers[i].name] = err.message;
+            newLatencyErrors[newResolvers[i].name] = (err as Error).message;
           }
         }
       }
       
       setResolvers(newResolvers);
       setLatencyErrors(newLatencyErrors);
-    } catch (err) {
+    } catch (err: unknown) {
       setError('Failed to test latencies');
-      console.error('Error testing latencies:', err);
+      console.error('Error testing latencies:', (err as Error));
     } finally {
       setTestingLatency(false);
     }
   };
 
   const handleResolverChange = (event: SelectChangeEvent<string[]>) => {
-    setSelectedResolvers(event.target.value);
+    setSelectedResolvers(event.target.value as string[]);
   };
 
   const filteredResolvers = resolvers.filter((resolver: Resolver) => {

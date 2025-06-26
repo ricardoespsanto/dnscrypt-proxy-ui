@@ -43,9 +43,9 @@ app.get('/api/settings', async (req: express.Request, res: express.Response) => 
   try {
     const settings = await SettingsService.read();
     return res.json(formatResponse(settings));
-  } catch (error) {
+  } catch (error: unknown) {
     logger.error('Error reading settings', error);
-    return res.status(error.status || 500).json(createError(error.message, error.status, error.details));
+    return res.status((error as any).status || 500).json(createError((error as Error).message, (error as any).status, (error as any).details));
   }
 });
 
@@ -85,9 +85,9 @@ app.post('/api/settings', validateSettings, async (req: express.Request, res: ex
     
     await SettingsService.save(settings);
     return res.json(formatResponse(null, 'Settings saved successfully'));
-  } catch (error) {
+  } catch (error: unknown) {
     logger.error('Error saving settings', error);
-    return res.status(error.status || 500).json(createError(error.message, error.status, error.details));
+    return res.status((error as any).status || 500).json(createError((error as Error).message, (error as any).status, (error as any).details));
   }
 });
 
@@ -101,9 +101,9 @@ app.get('/api/blocklists', async (req: express.Request, res: express.Response) =
     const blocklists = Array.isArray(list) ? list : [];
     
     return res.json(formatResponse({ blocklists }));
-  } catch (error) {
+  } catch (error: unknown) {
     logger.error('Error reading blocklists', error);
-    return res.status(error.status || 500).json(createError(error.message, error.status, error.details));
+    return res.status((error as any).status || 500).json(createError((error as Error).message, (error as any).status, (error as any).details));
   }
 });
 
@@ -126,9 +126,9 @@ app.post('/api/blocklists', validateBlocklists, async (req: express.Request, res
     
     await SettingsService.save(updatedSettings);
     return res.json(formatResponse(null, `${type} settings saved successfully`));
-  } catch (error) {
+  } catch (error: unknown) {
     logger.error('Error saving blocklists', error);
-    return res.status(error.status || 500).json(createError(error.message, error.status, error.details));
+    return res.status((error as any).status || 500).json(createError((error as Error).message, (error as any).status, (error as any).details));
   }
 });
 
@@ -137,9 +137,9 @@ app.get('/api/metrics', async (req: express.Request, res: express.Response) => {
   try {
     const metrics = await MetricsService.collect();
     return res.json(formatResponse(metrics));
-  } catch (error) {
+  } catch (error: unknown) {
     logger.error('Error fetching metrics', error);
-    return res.status(error.status || 500).json(createError(error.message, error.status, error.details));
+    return res.status((error as any).status || 500).json(createError((error as Error).message, (error as any).status, (error as any).details));
   }
 });
 
@@ -158,9 +158,9 @@ app.get('/api/resolvers', async (req: express.Request, res: express.Response) =>
       lb_estimator: lbEstimator,
       lb_estimator_interval: lbEstimatorInterval
     }));
-  } catch (error) {
+  } catch (error: unknown) {
     logger.error('Error reading resolvers', error);
-    return res.status(error.status || 500).json(createError(error.message, error.status, error.details));
+    return res.status((error as any).status || 500).json(createError((error as Error).message, (error as any).status, (error as any).details));
   }
 });
 
@@ -179,9 +179,9 @@ app.post('/api/resolvers', async (req: express.Request, res: express.Response) =
 
     await SettingsService.save(updatedSettings);
     return res.json(formatResponse(null, 'Resolvers saved successfully'));
-  } catch (error) {
+  } catch (error: unknown) {
     logger.error('Error saving resolvers', error);
-    return res.status(error.status || 500).json(createError(error.message, error.status, error.details));
+    return res.status((error as any).status || 500).json(createError((error as Error).message, (error as any).status, (error as any).details));
   }
 });
 
@@ -195,9 +195,9 @@ app.post('/api/resolvers/test-latency', async (req: express.Request, res: expres
     // Simulate latency test (replace with actual implementation)
     const latency = Math.floor(Math.random() * 100) + 20; // Random latency between 20-120ms
     return res.json(formatResponse({ latency }));
-  } catch (error) {
+  } catch (error: unknown) {
     logger.error('Error testing resolver latency', error);
-    return res.status(error.status || 500).json(createError(error.message, error.status, error.details));
+    return res.status((error as any).status || 500).json(createError((error as Error).message, (error as any).status, (error as any).details));
   }
 });
 
@@ -211,12 +211,12 @@ app.get('/api/service/status', async (req: express.Request, res: express.Respons
       status: status === 'active' ? 'running' : 'stopped',
       lastError: null
     }));
-  } catch (error) {
+  } catch (error: unknown) {
     logger.error('Error checking service status', error);
     // Always return stopped if any error occurs, and include the error message
     return res.json(formatResponse({
       status: 'stopped',
-      lastError: error.message || null
+      lastError: (error as Error).message || null
     }));
   }
 });
@@ -232,9 +232,9 @@ app.post('/api/service', async (req: express.Request, res: express.Response) => 
     await execAsync(`sudo systemctl ${action} dnscrypt-proxy`);
     
     return res.json(formatResponse(null, `Service ${action}ed successfully`));
-  } catch (error) {
+  } catch (error: unknown) {
     logger.error(`Error ${req.body.action}ing service`, error);
-    return res.status(500).json(createError(`Failed to ${req.body.action} service`, 500, error));
+    return res.status(500).json(createError(`Failed to ${req.body.action} service`, 500, error as Error));
   }
 });
 
@@ -242,9 +242,9 @@ app.get('/api/service/metrics', async (req: express.Request, res: express.Respon
   try {
     const metrics = await MetricsService.collect();
     return res.json(formatResponse(metrics));
-  } catch (error) {
+  } catch (error: unknown) {
     logger.error('Error getting service metrics', error);
-    return res.status(error.status || 500).json(createError(error.message, error.status, error.details));
+    return res.status((error as any).status || 500).json(createError((error as Error).message, (error as any).status, (error as any).details));
   }
 });
 
@@ -254,9 +254,9 @@ app.get('/api/logs', async (req: express.Request, res: express.Response) => {
     const { limit = 100 } = req.query;
     const logs = await LogService.getLogs(parseInt(limit, 10));
     return res.json(formatResponse(logs || []));
-  } catch (error) {
+  } catch (error: unknown) {
     logger.error('Error fetching logs', error);
-    return res.status(500).json(createError('Failed to fetch logs', 500, error));
+    return res.status(500).json(createError('Failed to fetch logs', 500, error as Error));
   }
 });
 

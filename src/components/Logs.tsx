@@ -23,7 +23,7 @@ import { Refresh as RefreshIcon } from '@mui/icons-material';
 import { logsApi } from '../services/api.ts';
 
 // Define log levels and their properties
-const LOG_LEVELS = {
+const LOG_LEVELS: { [key: string]: { label: string; color: string; description: string; } } = {
   emerg: {
     label: 'Emergency',
     color: 'text-red-600',
@@ -97,7 +97,7 @@ const Logs = () => {
   useEffect(() => {
     loadLogs();
 
-    let interval;
+    let interval: NodeJS.Timeout | undefined;
     if (autoRefresh) {
       interval = setInterval(loadLogs, 5000); // Refresh every 5 seconds
     }

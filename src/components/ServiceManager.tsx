@@ -52,8 +52,8 @@ const ServiceManager = () => {
       setStatus(response.status || 'unknown');
       setMetrics(response.metrics || metrics);
       setServiceManager(response.serviceManager || 'unknown');
-    } catch (err) {
-      console.error('Error loading service status:', err);
+    } catch (err: unknown) {
+      console.error('Error loading service status:', (err as Error));
       setStatus('unknown');
     }
   };
@@ -65,8 +65,8 @@ const ServiceManager = () => {
       await serviceApi.control(action);
       setSuccess(`Service ${action} successful`);
       await loadServiceStatus();
-    } catch (err) {
-      setError(`Failed to ${action} service: ${err.message}`);
+    } catch (err: unknown) {
+      setError(`Failed to ${action} service: ${(err as Error).message}`);
     } finally {
       setLoading(false);
     }

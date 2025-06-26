@@ -21,7 +21,7 @@ describe('MetricsService', () => {
   describe('collect', () => {
     it('should collect all metrics', async () => {
       // Mock exec responses
-      exec.mockImplementation((cmd, callback) => {
+      (exec as jest.Mock).mockImplementation((cmd: string, callback: (error: Error | null, result: { stdout: string }) => void) => {
         if (cmd.includes('uptime')) {
           callback(null, { stdout: 'up 2 hours, 30 minutes' });
         } else if (cmd.includes('top')) {
@@ -32,8 +32,8 @@ describe('MetricsService', () => {
       });
 
       // Mock os responses
-      os.totalmem.mockReturnValue(16 * 1024 * 1024 * 1024); // 16GB
-      os.freemem.mockReturnValue(8 * 1024 * 1024 * 1024); // 8GB
+      (os.totalmem as jest.Mock).mockReturnValue(16 * 1024 * 1024 * 1024); // 16GB
+      (os.freemem as jest.Mock).mockReturnValue(8 * 1024 * 1024 * 1024); // 8GB
 
       const metrics = await MetricsService.collect();
 
@@ -45,7 +45,7 @@ describe('MetricsService', () => {
     });
 
     it('should handle errors gracefully', async () => {
-      exec.mockImplementation((cmd, callback) => {
+      (exec as jest.Mock).mockImplementation((cmd: string, callback: (error: Error | null, result: { stdout: string }) => void) => {
         callback(new Error('Command failed'));
       });
 
@@ -59,8 +59,8 @@ describe('MetricsService', () => {
 
   describe('getMemoryUsage', () => {
     it('should calculate memory usage correctly', () => {
-      os.totalmem.mockReturnValue(16 * 1024 * 1024 * 1024); // 16GB
-      os.freemem.mockReturnValue(8 * 1024 * 1024 * 1024); // 8GB
+      (os.totalmem as jest.Mock).mockReturnValue(16 * 1024 * 1024 * 1024); // 16GB
+      (os.freemem as jest.Mock).mockReturnValue(8 * 1024 * 1024 * 1024); // 8GB
 
       const memoryUsage = MetricsService.getMemoryUsage();
       expect(memoryUsage).toBe('8192 MB');

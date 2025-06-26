@@ -85,7 +85,7 @@ export const settingsApi = {
     try {
       const response = await api.get(endpoints.settings);
       return response.data;
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Error fetching settings:', error);
       throw new Error('Failed to fetch settings');
     }
@@ -95,7 +95,7 @@ export const settingsApi = {
     try {
       const response = await api.post(endpoints.settings, settings);
       return response.data;
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Error saving settings:', error);
       throw new Error('Failed to save settings');
     }
@@ -108,7 +108,7 @@ export const resolversApi = {
     try {
       const response = await api.get(endpoints.resolvers);
       return response.data;
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Error fetching resolvers:', error);
       throw new Error('Failed to fetch resolvers');
     }
@@ -118,7 +118,7 @@ export const resolversApi = {
     try {
       const response = await api.post(endpoints.resolvers, resolvers);
       return response.data;
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Error saving resolvers:', error);
       throw new Error('Failed to save resolvers');
     }
@@ -147,9 +147,9 @@ export const blocklistsApi = {
       }
       
       return response.data;
-    } catch (error) {
+    } catch (error: unknown) {
       console.error(`Error fetching ${type}:`, error);
-      throw new Error(`Failed to fetch ${type}: ${error.message}`);
+      throw new Error(`Failed to fetch ${type}: ${(error as Error).message}`);
     }
   },
 
@@ -173,9 +173,9 @@ export const blocklistsApi = {
       }
       
       return response.data;
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Error saving blocklists:', error);
-      throw new Error(`Failed to save blocklists: ${error.message}`);
+      throw new Error(`Failed to save blocklists: ${(error as Error).message}`);
     }
   },
 };
@@ -186,9 +186,9 @@ export const metricsApi = {
     try {
       const response = await api.get('/metrics');
       return response.data;
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Error fetching metrics:', error);
-      throw error;
+      throw error as Error;
     }
   }
 };

@@ -66,7 +66,7 @@ const Blocklists = () => {
       setWhitelist(response.whitelist || []);
     } catch (error) {
       console.error('Error fetching data:', error);
-      setError(error.message || 'Failed to fetch domain lists');
+      setError((error as Error).message || 'Failed to fetch domain lists');
     } finally {
       setLoading(false);
     }
@@ -94,7 +94,7 @@ const Blocklists = () => {
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (error) {
       console.error('Error saving data:', error);
-      setSaveError(error.message || 'Failed to save changes');
+      setSaveError((error as Error).message || 'Failed to save changes');
     } finally {
       setIsSaving(false);
     }

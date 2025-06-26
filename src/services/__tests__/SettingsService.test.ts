@@ -12,7 +12,7 @@ describe('SettingsService', () => {
 
   describe('read', () => {
     it('should return default settings when config file does not exist', async () => {
-      FileSystemService.exists.mockResolvedValue(false);
+      (FileSystemService.exists as jest.Mock).mockResolvedValue(false);
       const settings = await SettingsService.read();
       expect(settings).toEqual(SettingsService.getDefaultSettings());
     });
@@ -22,16 +22,16 @@ describe('SettingsService', () => {
         listen_addresses: ['127.0.0.1:53'],
         max_clients: 250
       };
-      FileSystemService.exists.mockResolvedValue(true);
-      FileSystemService.readFile.mockResolvedValue(JSON.stringify(mockSettings));
+      (FileSystemService.exists as jest.Mock).mockResolvedValue(true);
+      (FileSystemService.readFile as jest.Mock).mockResolvedValue(JSON.stringify(mockSettings));
 
       const settings = await SettingsService.read();
       expect(settings).toEqual(mockSettings);
     });
 
     it('should handle read errors', async () => {
-      FileSystemService.exists.mockResolvedValue(true);
-      FileSystemService.readFile.mockRejectedValue(new Error('Read error'));
+      (FileSystemService.exists as jest.Mock).mockResolvedValue(true);
+      (FileSystemService.readFile as jest.Mock).mockRejectedValue(new Error('Read error'));
 
       await expect(SettingsService.read()).rejects.toThrow('Failed to read settings');
     });
@@ -44,7 +44,7 @@ describe('SettingsService', () => {
         max_clients: 250
       };
 
-      FileSystemService.writeFile.mockResolvedValue(true);
+      (FileSystemService.writeFile as jest.Mock).mockResolvedValue(true);
       await SettingsService.save(settings);
 
       expect(FileSystemService.writeFile).toHaveBeenCalled();
@@ -56,7 +56,7 @@ describe('SettingsService', () => {
         max_clients: 250
       };
 
-      FileSystemService.writeFile.mockRejectedValue(new Error('Write error'));
+      (FileSystemService.writeFile as jest.Mock).mockRejectedValue(new Error('Write error'));
       await expect(SettingsService.save(settings)).rejects.toThrow('Failed to save settings');
     });
   });

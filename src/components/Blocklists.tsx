@@ -39,19 +39,19 @@ const Blocklists = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
-  const [blocklists, setBlocklists] = useState([]);
-  const [whitelist, setWhitelist] = useState([]);
-  const [activeTab, setActiveTab] = useState('denylist');
-  const [error, setError] = useState(null);
-  const [isSaving, setIsSaving] = useState(false);
-  const [saveError, setSaveError] = useState(null);
-  const [saveSuccess, setSaveSuccess] = useState(false);
-  const [openDialog, setOpenDialog] = useState(false);
-  const [newDomain, setNewDomain] = useState('');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [loading, setLoading] = useState(true);
+  const [blocklists, setBlocklists] = useState<string[]>([]);
+  const [whitelist, setWhitelist] = useState<string[]>([]);
+  const [activeTab, setActiveTab] = useState<'denylist' | 'allowlist'>('denylist');
+  const [error, setError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState<boolean>(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveSuccess, setSaveSuccess] = useState<boolean>(false);
+  const [openDialog, setOpenDialog] = useState<boolean>(false);
+  const [newDomain, setNewDomain] = useState<string>('');
+  const [searchTerm, setSearchTerm] = useState<string>('');
+  const [loading, setLoading] = useState<boolean>(true);
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (): Promise<void> => {
     try {
       setLoading(true);
       setError(null);
@@ -77,7 +77,7 @@ const Blocklists = () => {
     fetchData();
   }, []); // Remove fetchData from dependencies since it's stable
 
-  const handleSave = async () => {
+  const handleSave = async (): Promise<void> => {
     try {
       setIsSaving(true);
       setSaveError(null);
@@ -100,7 +100,7 @@ const Blocklists = () => {
     }
   };
 
-  const handleAddDomain = () => {
+  const handleAddDomain = (): void => {
     if (!newDomain.trim()) {
       setError('Domain is required');
       return;
@@ -127,7 +127,7 @@ const Blocklists = () => {
     setOpenDialog(false);
   };
 
-  const handleDeleteDomain = (index) => {
+  const handleDeleteDomain = (index: number) => {
     if (activeTab === 'denylist') {
       const newDenylists = [...blocklists];
       newDenylists.splice(index, 1);
@@ -141,7 +141,7 @@ const Blocklists = () => {
     }
   };
 
-  const handleTabChange = (event, newValue) => {
+  const handleTabChange = (event: React.SyntheticEvent, newValue: 'denylist' | 'allowlist') => {
     setActiveTab(newValue);
   };
 

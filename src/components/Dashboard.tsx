@@ -18,17 +18,24 @@ import {
 } from '@mui/icons-material';
 import { metricsApi } from '../services/api.ts';
 
+interface MetricsState {
+  encryptedQueries: number;
+  blockedQueries: number;
+  averageLatency: number;
+  currentResolver: string;
+}
+
 const Dashboard = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
-  const [metrics, setMetrics] = useState({
+  const [metrics, setMetrics] = useState<MetricsState>({
     encryptedQueries: 0,
     blockedQueries: 0,
     averageLatency: 0,
     currentResolver: '',
   });
-  const [error, setError] = useState('');
+  const [error, setError] = useState<string>('');
 
   useEffect(() => {
     loadMetrics();
@@ -36,7 +43,7 @@ const Dashboard = () => {
     return () => clearInterval(interval);
   }, []);
 
-  const loadMetrics = async () => {
+  const loadMetrics = async (): Promise<void> => {
     try {
       const response = await metricsApi.fetch();
       setMetrics(response);

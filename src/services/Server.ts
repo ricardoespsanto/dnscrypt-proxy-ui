@@ -29,7 +29,7 @@ app.use(securityMiddleware);
 app.use(express.json({ limit: '50mb' }));
 
 // Increase server timeout for all routes
-app.use((req, res, next) => {
+app.use((req: express.Request, res: express.Response, next: express.NextFunction) => {
   req.setTimeout(config.server.timeout);
   res.setTimeout(config.server.timeout);
   next();
@@ -39,7 +39,7 @@ app.use((req, res, next) => {
 app.use('/api/', apiLimiter);
 
 // Settings endpoints
-app.get('/api/settings', async (req, res) => {
+app.get('/api/settings', async (req: express.Request, res: express.Response) => {
   try {
     const settings = await SettingsService.read();
     return res.json(formatResponse(settings));
@@ -49,7 +49,7 @@ app.get('/api/settings', async (req, res) => {
   }
 });
 
-app.post('/api/settings', validateSettings, async (req, res) => {
+app.post('/api/settings', validateSettings, async (req: express.Request, res: express.Response) => {
   try {
     const settings = req.body;
     
@@ -92,7 +92,7 @@ app.post('/api/settings', validateSettings, async (req, res) => {
 });
 
 // Blocklists endpoints
-app.get('/api/blocklists', async (req, res) => {
+app.get('/api/blocklists', async (req: express.Request, res: express.Response) => {
   try {
     const settings = await SettingsService.read();
     const { type = 'blacklist' } = req.query;
@@ -107,7 +107,7 @@ app.get('/api/blocklists', async (req, res) => {
   }
 });
 
-app.post('/api/blocklists', validateBlocklists, async (req, res) => {
+app.post('/api/blocklists', validateBlocklists, async (req: express.Request, res: express.Response) => {
   try {
     const settings = await SettingsService.read();
     const { blocklists, type = 'blacklist' } = req.body;
@@ -133,7 +133,7 @@ app.post('/api/blocklists', validateBlocklists, async (req, res) => {
 });
 
 // Metrics endpoint
-app.get('/api/metrics', async (req, res) => {
+app.get('/api/metrics', async (req: express.Request, res: express.Response) => {
   try {
     const metrics = await MetricsService.collect();
     return res.json(formatResponse(metrics));
@@ -144,7 +144,7 @@ app.get('/api/metrics', async (req, res) => {
 });
 
 // Resolvers endpoints
-app.get('/api/resolvers', async (req, res) => {
+app.get('/api/resolvers', async (req: express.Request, res: express.Response) => {
   try {
     const settings = await SettingsService.read();
     const resolvers = settings.server_names || [];
@@ -164,7 +164,7 @@ app.get('/api/resolvers', async (req, res) => {
   }
 });
 
-app.post('/api/resolvers', async (req, res) => {
+app.post('/api/resolvers', async (req: express.Request, res: express.Response) => {
   try {
     const settings = await SettingsService.read();
     const { resolvers, lb_strategy, lb_estimator, lb_estimator_interval } = req.body;
@@ -185,7 +185,7 @@ app.post('/api/resolvers', async (req, res) => {
   }
 });
 
-app.post('/api/resolvers/test-latency', async (req, res) => {
+app.post('/api/resolvers/test-latency', async (req: express.Request, res: express.Response) => {
   try {
     const { server, protocol } = req.body;
     if (!server) {
@@ -202,7 +202,7 @@ app.post('/api/resolvers/test-latency', async (req, res) => {
 });
 
 // Service endpoints
-app.get('/api/service/status', async (req, res) => {
+app.get('/api/service/status', async (req: express.Request, res: express.Response) => {
   try {
     // Check if dnscrypt-proxy service is running
     const { stdout } = await execAsync('systemctl is-active dnscrypt-proxy');
@@ -221,7 +221,7 @@ app.get('/api/service/status', async (req, res) => {
   }
 });
 
-app.post('/api/service', async (req, res) => {
+app.post('/api/service', async (req: express.Request, res: express.Response) => {
   try {
     const { action } = req.body;
     if (!['start', 'stop', 'restart'].includes(action)) {
@@ -238,7 +238,7 @@ app.post('/api/service', async (req, res) => {
   }
 });
 
-app.get('/api/service/metrics', async (req, res) => {
+app.get('/api/service/metrics', async (req: express.Request, res: express.Response) => {
   try {
     const metrics = await MetricsService.collect();
     return res.json(formatResponse(metrics));
@@ -249,7 +249,7 @@ app.get('/api/service/metrics', async (req, res) => {
 });
 
 // Logs endpoint
-app.get('/api/logs', async (req, res) => {
+app.get('/api/logs', async (req: express.Request, res: express.Response) => {
   try {
     const { limit = 100 } = req.query;
     const logs = await LogService.getLogs(parseInt(limit, 10));

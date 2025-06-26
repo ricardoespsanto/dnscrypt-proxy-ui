@@ -1,12 +1,12 @@
 import fs from 'fs/promises';
 import path from 'path';
-import { createError } from '../../utils/error.js';
+import { createError } from '../../utils/error.ts';
 
 export const testFileSystem = {
-  async getStats(filePath) {
+  async getStats(filePath: string): Promise<fs.Stats> {
     try {
       return await fs.stat(filePath);
-    } catch (error) {
+    } catch (error: any) {
       if (error.code === 'ENOENT') {
         throw createError('File not found', 404, error);
       }
@@ -14,10 +14,10 @@ export const testFileSystem = {
     }
   },
 
-  async readDir(dirPath) {
+  async readDir(dirPath: string): Promise<string[]> {
     try {
       return await fs.readdir(dirPath);
-    } catch (error) {
+    } catch (error: any) {
       if (error.code === 'ENOENT') {
         throw createError('Directory not found', 404, error);
       }

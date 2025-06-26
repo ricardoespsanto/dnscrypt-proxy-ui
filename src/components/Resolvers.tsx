@@ -120,21 +120,133 @@ const getFeaturesFromName = (name) => {
   return features;
 };
 
+interface FeatureConfig {
+  label: string;
+  description: string;
+  default: boolean;
+}
+
+interface Features {
+  dnssec: boolean;
+  noLogs: boolean;
+  noFilter: boolean;
+  ipv6: boolean;
+  family: boolean;
+  adblock: boolean;
+}
+
+interface Resolver {
+  name: string;
+  provider: string;
+  protocol: 'DNSCrypt' | 'DoH';
+  server: string;
+  publicKey?: string;
+  features: Features;
+  latency: string;
+  isFavorite: boolean;
+  enabled: boolean;
+  location: 'IPv4' | 'IPv6';
+  error?: string;
+}
+
+interface SortConfig {
+  key: keyof Resolver | 'latency';
+  direction: 'asc' | 'desc';
+}
+
+interface NewResolverState {
+  name: string;
+  provider: string;
+  protocol: 'DNSCrypt' | 'DoH';
+  server: string;
+  publicKey: string;
+  features: Features;
+}
+
+// Define a single source of truth for features
+const FEATURES: Record<string, FeatureConfig> = {
+  dnssec: {
+    label: 'DNSSEC',
+    description: 'Supports DNSSEC validation',
+    default: true
+  },
+  noLogs: {
+    label: 'No Logs',
+    description: 'Does not log queries',
+    default: true
+  },
+  noFilter: {
+    label: 'No Filter',
+    description: 'Does not filter content',
+    default: false
+  },
+  ipv6: {
+    label: 'IPv6',
+    description: 'Supports IPv6',
+    default: false
+  },
+  family: {
+    label: 'Family',
+    description: 'Family-friendly filtering',
+    default: false
+  },
+  adblock: {
+    label: 'Ad Block',
+    description: 'Blocks advertisements',
+    default: false
+  }
+};
+
+// Create default features object with default values
+const DEFAULT_FEATURES: Features = Object.entries(FEATURES).reduce((acc, [key, { default: defaultValue }]) => {
+  (acc as any)[key] = defaultValue;
+  return acc;
+}, {} as Features);
+
+// Helper function to determine protocol from server address
+const getProtocolFromServer = (server: string): 'DNSCrypt' | 'DoH' => {
+  if (!server) return 'DNSCrypt';
+  return server.startsWith('https://') ? 'DoH' : 'DNSCrypt';
+};
+
+// Helper function to determine features from resolver name
+const getFeaturesFromName = (name: string): Features => {
+  const features: Features = { ...DEFAULT_FEATURES };
+  
+  // Map name patterns to features
+  const namePatterns: Record<string, keyof Features> = {
+    nofilter: 'noFilter',
+    nolog: 'noLogs',
+    family: 'family',
+    adblock: 'adblock',
+    ipv6: 'ipv6'
+  };
+
+  Object.entries(namePatterns).forEach(([pattern, feature]) => {
+    features[feature] = name.toLowerCase().includes(pattern);
+  });
+
+  // DNSSEC is enabled by default unless explicitly disabled
+  features.dnssec = !name.toLowerCase().includes('nofilter');
+
+  return features;
+};
+
 const Resolvers = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
-  const [protocolFilter, setProtocolFilter] = useState('all');
-  const [resolvers, setResolvers] = useState([]);
-  const [lbStrategy, setLbStrategy] = useState('p2');
-  const [lbEstimator, setLbEstimator] = useState(true);
-  const [lbEstimatorInterval, setLbEstimatorInterval] = useState(300);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
-  const [openDialog, setOpenDialog] = useState(false);
-  const [editingResolver, setEditingResolver] = useState(null);
-  const [newResolver, setNewResolver] = useState({
+  const [protocolFilter, setProtocolFilter] = useState<'all' | 'DNSCrypt' | 'DoH'>('all');
+  const [resolvers, setResolvers] = useState<Resolver[]>([]);
+  const [lbStrategy, setLbStrategy] = useState<string>('p2');
+  const [lbEstimator, setLbEstimator] = useState<boolean>(true);
+  const [lbEstimatorInterval, setLbEstimatorInterval] = useState<number>(300);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string>('');
+  const [success, setSuccess] = useState<string>('');
+  const [openDialog, setOpenDialog] = useState<boolean>(false);
+  const [editingResolver, setEditingResolver] = useState<Resolver | null>(null);
+  const [newResolver, setNewResolver] = useState<NewResolverState>({
     name: '',
     provider: '',
     protocol: 'DNSCrypt',
@@ -142,27 +254,27 @@ const Resolvers = () => {
     publicKey: '',
     features: { ...DEFAULT_FEATURES },
   });
-  const [selectedResolvers, setSelectedResolvers] = useState([]);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(25);
-  const [featureFilters, setFeatureFilters] = useState({ ...DEFAULT_FEATURES });
-  const [sortConfig, setSortConfig] = useState({
+  const [selectedResolvers, setSelectedResolvers] = useState<string[]>([]);
+  const [searchTerm, setSearchTerm] = useState<string>('');
+  const [page, setPage] = useState<number>(0);
+  const [rowsPerPage, setRowsPerPage] = useState<number>(25);
+  const [featureFilters, setFeatureFilters] = useState<Features>({ ...DEFAULT_FEATURES });
+  const [sortConfig, setSortConfig] = useState<SortConfig>({
     key: 'name',
     direction: 'asc'
   });
-  const [testingLatency, setTestingLatency] = useState(false);
-  const [latencyErrors, setLatencyErrors] = useState({});
-  const [importDialogOpen, setImportDialogOpen] = useState(false);
-  const [importingResolvers, setImportingResolvers] = useState([]);
-  const [importProgress, setImportProgress] = useState(0);
-  const [importStatus, setImportStatus] = useState('');
+  const [testingLatency, setTestingLatency] = useState<boolean>(false);
+  const [latencyErrors, setLatencyErrors] = useState<Record<string, string>>({});
+  const [importDialogOpen, setImportDialogOpen] = useState<boolean>(false);
+  const [importingResolvers, setImportingResolvers] = useState<Resolver[]>([]);
+  const [importProgress, setImportProgress] = useState<number>(0);
+  const [importStatus, setImportStatus] = useState<string>('');
 
   useEffect(() => {
     loadResolvers();
   }, []);
 
-  const loadResolvers = async () => {
+  const loadResolvers = async (): Promise<void> => {
     try {
       setLoading(true);
       const response = await resolversApi.fetch();
@@ -183,7 +295,7 @@ const Resolvers = () => {
     }
   };
 
-  const handleSave = async () => {
+  const handleSave = async (): Promise<void> => {
     try {
       setLoading(true);
       await resolversApi.save({
@@ -202,19 +314,19 @@ const Resolvers = () => {
     }
   };
 
-  const handleToggleEnabled = (index) => {
+  const handleToggleEnabled = (index: number): void => {
     const newResolvers = [...resolvers];
     newResolvers[index].enabled = !newResolvers[index].enabled;
     setResolvers(newResolvers);
   };
 
-  const handleToggleFavorite = (index) => {
+  const handleToggleFavorite = (index: number): void => {
     const newResolvers = [...resolvers];
     newResolvers[index].isFavorite = !newResolvers[index].isFavorite;
     setResolvers(newResolvers);
   };
 
-  const handleAddResolver = () => {
+  const handleAddResolver = (): void => {
     setEditingResolver(null);
     setNewResolver({
       name: '',
@@ -227,7 +339,7 @@ const Resolvers = () => {
     setOpenDialog(true);
   };
 
-  const handleEditResolver = (resolver) => {
+  const handleEditResolver = (resolver: Resolver): void => {
     setEditingResolver(resolver);
     setNewResolver({
       name: resolver.name,
@@ -240,7 +352,7 @@ const Resolvers = () => {
     setOpenDialog(true);
   };
 
-  const handleSaveResolver = () => {
+  const handleSaveResolver = (): void => {
     if (editingResolver) {
       // Update existing resolver
       const index = resolvers.findIndex(r => r.name === editingResolver.name);
@@ -267,13 +379,13 @@ const Resolvers = () => {
     setOpenDialog(false);
   };
 
-  const handleDeleteResolver = (index) => {
+  const handleDeleteResolver = (index: number): void => {
     const newResolvers = [...resolvers];
     newResolvers.splice(index, 1);
     setResolvers(newResolvers);
   };
 
-  const testResolver = async (resolver) => {
+  const testResolver = async (resolver: Resolver): Promise<Resolver> => {
     try {
       const response = await fetch(`http://localhost:3000/api/resolvers/test-latency`, {
         method: 'POST',
@@ -301,7 +413,7 @@ const Resolvers = () => {
     }
   };
 
-  const handleImportResolvers = async () => {
+  const handleImportResolvers = async (): Promise<void> => {
     try {
       setLoading(true);
       setImportDialogOpen(true);
@@ -422,7 +534,7 @@ const Resolvers = () => {
     }
   };
 
-  const handleConfirmImport = () => {
+  const handleConfirmImport = (): void => {
     const validResolvers = importingResolvers.filter(r => !r.error);
 
     const existingNames = new Set(resolvers.map(r => r.name));
@@ -436,7 +548,7 @@ const Resolvers = () => {
     setImportDialogOpen(false);
   };
 
-  const handleTestLatency = async (index) => {
+  const handleTestLatency = async (index: number): Promise<void> => {
     try {
       setTestingLatency(true);
       const resolver = resolvers[index];
@@ -485,7 +597,7 @@ const Resolvers = () => {
     }
   };
 
-  const handleTestAllLatencies = async () => {
+  const handleTestAllLatencies = async (): Promise<void> => {
     try {
       setTestingLatency(true);
       const newResolvers = [...resolvers];
@@ -543,11 +655,11 @@ const Resolvers = () => {
     }
   };
 
-  const handleResolverChange = (event) => {
+  const handleResolverChange = (event: SelectChangeEvent<string[]>) => {
     setSelectedResolvers(event.target.value);
   };
 
-  const filteredResolvers = resolvers.filter(resolver => {
+  const filteredResolvers = resolvers.filter((resolver: Resolver) => {
     const matchesSearch = resolver.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          resolver.provider.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesProtocol = protocolFilter === 'all' || resolver.protocol === protocolFilter;
@@ -557,7 +669,7 @@ const Resolvers = () => {
     return matchesSearch && matchesProtocol && matchesFeatures;
   });
 
-  const sortedResolvers = [...filteredResolvers].sort((a, b) => {
+  const sortedResolvers = [...filteredResolvers].sort((a: Resolver, b: Resolver) => {
     if (sortConfig.key === 'latency') {
       const aLatency = parseInt(a.latency) || 0;
       const bLatency = parseInt(b.latency) || 0;
@@ -575,23 +687,23 @@ const Resolvers = () => {
     page * rowsPerPage + rowsPerPage
   );
 
-  const handleChangePage = (event, newPage) => {
+  const handleChangePage = (event: React.MouseEvent<HTMLButtonElement> | null, newPage: number): void => {
     setPage(newPage);
   };
 
-  const handleChangeRowsPerPage = (event) => {
+  const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>): void => {
     setRowsPerPage(parseInt(event.target.value, 10));
     setPage(0);
   };
 
-  const handleSort = (key) => {
+  const handleSort = (key: keyof Resolver | 'latency'): void => {
     setSortConfig(prev => ({
       key,
       direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc'
     }));
   };
 
-  const handleFeatureFilterChange = (feature) => (event) => {
+  const handleFeatureFilterChange = (feature: keyof Features) => (event: React.ChangeEvent<HTMLInputElement>): void => {
     setFeatureFilters(prev => ({
       ...prev,
       [feature]: event.target.checked
@@ -599,7 +711,7 @@ const Resolvers = () => {
     setPage(0);
   };
 
-  const ImportDialog = () => (
+  const ImportDialog = (): JSX.Element => (
     <Dialog 
       open={importDialogOpen} 
       onClose={() => setImportDialogOpen(false)}

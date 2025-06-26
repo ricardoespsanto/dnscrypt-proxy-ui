@@ -20,13 +20,20 @@ import {
 } from '@mui/icons-material';
 import { serviceApi } from '../services/api.ts';
 
+interface Metrics {
+  uptime: string;
+  memoryUsage: string;
+  cpuUsage: string;
+  activeConnections: number;
+}
+
 const ServiceManager = () => {
-  const [status, setStatus] = useState('unknown');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
-  const [serviceManager, setServiceManager] = useState('unknown');
-  const [metrics, setMetrics] = useState({
+  const [status, setStatus] = useState<string>('unknown');
+  const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string>('');
+  const [success, setSuccess] = useState<string>('');
+  const [serviceManager, setServiceManager] = useState<string>('unknown');
+  const [metrics, setMetrics] = useState<Metrics>({
     uptime: '0',
     memoryUsage: '0 MB',
     cpuUsage: '0%',
@@ -39,7 +46,7 @@ const ServiceManager = () => {
     return () => clearInterval(interval);
   }, []);
 
-  const loadServiceStatus = async () => {
+  const loadServiceStatus = async (): Promise<void> => {
     try {
       const response = await serviceApi.getStatus();
       setStatus(response.status || 'unknown');
@@ -51,7 +58,7 @@ const ServiceManager = () => {
     }
   };
 
-  const handleServiceAction = async (action) => {
+  const handleServiceAction = async (action: string): Promise<void> => {
     try {
       setLoading(true);
       setError('');
@@ -65,7 +72,7 @@ const ServiceManager = () => {
     }
   };
 
-  const getStatusColor = () => {
+  const getStatusColor = (): string => {
     switch (status) {
       case 'active':
         return 'success.main';
@@ -76,7 +83,7 @@ const ServiceManager = () => {
     }
   };
 
-  const getServiceManagerName = () => {
+  const getServiceManagerName = (): string => {
     switch (serviceManager) {
       case 'systemd':
         return 'Systemd';

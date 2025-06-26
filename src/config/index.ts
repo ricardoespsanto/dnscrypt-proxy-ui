@@ -4,9 +4,58 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-export const config = {
+interface CorsConfig {
+  origin: boolean | string | string[];
+  methods: string[];
+  allowedHeaders: string[];
+  exposedHeaders: string[];
+  credentials: boolean;
+  maxAge: number;
+  preflightContinue: boolean;
+  optionsSuccessStatus: number;
+}
+
+interface ServerConfig {
+  port: number;
+  timeout: number;
+  cors: CorsConfig;
+}
+
+interface PathsConfig {
+  log: string;
+  config: string;
+}
+
+interface MetricsConfig {
+  logLinesToProcess: number;
+  latencyTestTimeout: number;
+}
+
+interface ValidationRule {
+  min?: number;
+  max?: number;
+}
+
+interface ValidationConfig {
+  settings: {
+    max_clients: ValidationRule;
+    netprobe_timeout: ValidationRule;
+    cache_size: ValidationRule;
+    cache_ttl_min: ValidationRule;
+    cache_ttl_max: ValidationRule;
+  };
+}
+
+interface AppConfig {
+  server: ServerConfig;
+  paths: PathsConfig;
+  metrics: MetricsConfig;
+  validation: ValidationConfig;
+}
+
+export const config: AppConfig = {
   server: {
-    port: process.env.PORT || 3000,
+    port: process.env.PORT ? parseInt(process.env.PORT, 10) : 3000,
     timeout: 30000, // 30 seconds
     cors: {
       origin: true, // Allow all origins in development

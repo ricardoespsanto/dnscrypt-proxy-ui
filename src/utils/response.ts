@@ -1,6 +1,6 @@
 // Format successful response
-export const formatResponse = (data = null, message = null) => {
-  const response = {
+export const formatResponse = (data: any = null, message: string | null = null): object => {
+  const response: { success: boolean; timestamp: string; data?: any; message?: string } = {
     success: true,
     timestamp: new Date().toISOString()
   };

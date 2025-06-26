@@ -1,3 +1,4 @@
+import { Request, Response, NextFunction } from 'express';
 import rateLimit from 'express-rate-limit';
 import helmet from 'helmet';
 
@@ -11,7 +12,7 @@ export const apiLimiter = rateLimit({
     error: 'Too many requests from this IP, please try again later',
     timestamp: new Date().toISOString()
   },
-  handler: (req, res) => {
+  handler: (req: Request, res: Response) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');

@@ -1,4 +1,10 @@
 import winston from 'winston';
+import { Request, Response, NextFunction } from 'express';
+
+interface CustomError extends Error {
+  status?: number;
+  details?: any;
+}
 
 // Create logger instance
 export const logger = winston.createLogger({
@@ -25,8 +31,8 @@ export const logger = winston.createLogger({
 });
 
 // Create error object with consistent format
-export const createError = (message, status = 500, details = null) => {
-  const error = {
+export const createError = (message: string, status: number = 500, details: any = null): object => {
+  const error: { success: boolean; error: string; timestamp: string; details?: any; status?: number } = {
     success: false,
     error: message,
     timestamp: new Date().toISOString()
@@ -44,7 +50,7 @@ export const createError = (message, status = 500, details = null) => {
 };
 
 // Error handler middleware
-export const errorHandler = (err, req, res, next) => {
+export const errorHandler = (err: CustomError, req: Request, res: Response, next: NextFunction): void => {
   logger.error('Error:', err);
 
   const status = err.status || 500;

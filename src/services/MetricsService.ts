@@ -1,19 +1,29 @@
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import os from 'os';
-import { config } from '../config/index.js';
-import FileSystemService from './FileSystemService.js';
-import { createError } from '../utils/error.js';
+import { config } from '../config/index.ts';
+import FileSystemService from './FileSystemService.ts';
+import { createError } from '../utils/error.ts';
 
 const execAsync = promisify(exec);
 
+interface Metrics {
+  encryptedQueries: number;
+  blockedQueries: number;
+  averageLatency: number;
+  currentResolver: string;
+  serviceStatus: string;
+  lastError: string | null;
+  uptime: number;
+}
+
 class MetricsService {
-  static async collect() {
+  static async collect(): Promise<Metrics> {
     try {
       const content = await FileSystemService.readFile(config.paths.log);
       const lines = content.split('\n').filter(line => line.trim());
       
-      const metrics = {
+      const metrics: Metrics = {
         encryptedQueries: 0,
         blockedQueries: 0,
         averageLatency: 0,
@@ -22,6 +32,7 @@ class MetricsService {
         lastError: null,
         uptime: 0
       };
+
 
       const recentLines = lines.slice(-config.metrics.logLinesToProcess);
       
@@ -78,7 +89,7 @@ class MetricsService {
     }
   }
 
-  static async getSystemMetrics() {
+  static async getSystemMetrics(): Promise<{ uptime: string; memoryUsage: string; cpuUsage: string; activeConnections: number }> {
     try {
       const [uptime, memory, cpu] = await Promise.all([
         this.getUptime(),
@@ -97,7 +108,7 @@ class MetricsService {
     }
   }
 
-  static async getUptime() {
+  static async getUptime(): Promise<string> {
     try {
       const { stdout } = await execAsync('uptime -p');
       return stdout.trim();
@@ -106,14 +117,14 @@ class MetricsService {
     }
   }
 
-  static getMemoryUsage() {
+  static getMemoryUsage(): string {
     const totalMem = os.totalmem();
     const freeMem = os.freemem();
     const usedMem = totalMem - freeMem;
     return `${Math.round(usedMem / 1024 / 1024)} MB`;
   }
 
-  static async getCpuUsage() {
+  static async getCpuUsage(): Promise<string> {
     try {
       const { stdout } = await execAsync('top -bn1 | grep "Cpu(s)" | awk \'{print $2}\'');
       return `${Math.round(parseFloat(stdout))}%`;
@@ -122,7 +133,7 @@ class MetricsService {
     }
   }
 
-  static async getActiveConnections() {
+  static async getActiveConnections(): Promise<number> {
     try {
       const { stdout } = await execAsync('netstat -an | grep :53 | grep ESTABLISHED | wc -l');
       return parseInt(stdout.trim());

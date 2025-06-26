@@ -1,18 +1,50 @@
 import path from 'path';
 import TOML from '@iarna/toml';
-import { config } from '../config/index.js';
-import FileSystemService from './FileSystemService.js';
-import { createError } from '../utils/error.js';
+import { config } from '../config/index.ts';
+import FileSystemService from './FileSystemService.ts';
+import { createError } from '../utils/error.ts';
+
+interface Settings {
+  listen_addresses: string[];
+  max_clients: number;
+  ipv4_servers: boolean;
+  ipv6_servers: boolean;
+  dnscrypt_servers: boolean;
+  doh_servers: boolean;
+  require_dnssec: boolean;
+  require_nolog: boolean;
+  require_nofilter: boolean;
+  disabled_server_names: string[];
+  fallback_resolvers: string[];
+  ignore_system_dns: boolean;
+  netprobe_timeout: number;
+  log_level: string;
+  log_file: string;
+  block_ipv6: boolean;
+  cache: boolean;
+  cache_size: number;
+  cache_ttl_min: number;
+  cache_ttl_max: number;
+  forwarding_rules: string;
+  cloaking_rules: string;
+  blacklist: string;
+  whitelist: string;
+  blocklists: string[];
+  server_names: string[];
+  lb_strategy: string;
+  lb_estimator: boolean;
+  lb_estimator_interval: number;
+}
 
 class SettingsService {
-  static async read() {
+  static async read(): Promise<Settings> {
     try {
       if (!await FileSystemService.exists(config.paths.config)) {
         return this.getDefaultSettings();
       }
 
       const content = await FileSystemService.readFile(config.paths.config);
-      const settings = TOML.parse(content);
+      const settings: Settings = TOML.parse(content);
       
       // Ensure blocklists and whitelist are arrays
       if (!Array.isArray(settings.blocklists)) {
@@ -23,23 +55,23 @@ class SettingsService {
       }
 
       return settings;
-    } catch (error) {
+    } catch (error: any) {
       throw createError('Failed to read settings', 500, error);
     }
   }
 
-  static async save(settings) {
+  static async save(settings: Settings): Promise<boolean> {
     try {
       const tomlContent = TOML.stringify(settings);
       await FileSystemService.ensureDirectory(path.dirname(config.paths.config));
       await FileSystemService.writeFile(config.paths.config, tomlContent);
       return true;
-    } catch (error) {
+    } catch (error: any) {
       throw createError('Failed to save settings', 500, error);
     }
   }
 
-  static getDefaultSettings() {
+  static getDefaultSettings(): Settings {
     return {
       listen_addresses: ['127.0.0.1:53'],
       max_clients: 250,

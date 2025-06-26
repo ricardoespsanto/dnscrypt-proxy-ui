@@ -66,19 +66,25 @@ const LOG_LEVELS = {
   }
 };
 
+interface LogEntry {
+  timestamp: string;
+  level: string;
+  message: string;
+}
+
 const Logs = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
-  const [logs, setLogs] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [selectedLevel, setSelectedLevel] = useState('all');
-  const [autoRefresh, setAutoRefresh] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [limit, setLimit] = useState(100);
+  const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedLevel, setSelectedLevel] = useState<string>('all');
+  const [autoRefresh, setAutoRefresh] = useState<boolean>(true);
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [limit, setLimit] = useState<number>(100);
 
-  const loadLogs = async () => {
+  const loadLogs = async (): Promise<void> => {
     try {
       const response = await logsApi.getLogs(limit);
       setLogs(response.logs || []);
@@ -103,7 +109,7 @@ const Logs = () => {
     };
   }, [autoRefresh]);
 
-  const handleClearLogs = async () => {
+  const handleClearLogs = async (): Promise<void> => {
     try {
       await logsApi.clear();
       setLogs([]);
@@ -114,13 +120,13 @@ const Logs = () => {
     }
   };
 
-  const filteredLogs = logs.filter(log => {
+  const filteredLogs = logs.filter((log: LogEntry) => {
     const matchesLevel = selectedLevel === 'all' || log.level === selectedLevel;
     const matchesSearch = log.message.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesLevel && matchesSearch;
   });
 
-  const getLogLevelColor = (level) => {
+  const getLogLevelColor = (level: string): string => {
     return LOG_LEVELS[level]?.color || 'text-gray-700';
   };
 

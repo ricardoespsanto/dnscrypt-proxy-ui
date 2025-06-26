@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { API_CONFIG } from '../config/defaults';
+import { API_CONFIG } from '../config/defaults.ts';
 
 // Create axios instance with default config
 const api = axios.create({
@@ -64,15 +64,15 @@ const endpoints = {
 
 // Log related API calls
 export const logsApi = {
-  fetch: async () => {
+  fetch: async (): Promise<any> => {
     const response = await axios.get('/api/logs');
     return response.data;
   },
-  getLogs: async (limit) => {
+  getLogs: async (limit: number): Promise<any> => {
     const response = await axios.get(`/api/logs?limit=${limit}`);
     return response.data;
   },
-  clear: async () => {
+  clear: async (): Promise<any> => {
     const response = await axios.delete('/api/logs');
     return response.data;
   },
@@ -81,7 +81,7 @@ export const logsApi = {
 
 // Settings related API calls
 export const settingsApi = {
-  fetch: async () => {
+  fetch: async (): Promise<any> => {
     try {
       const response = await api.get(endpoints.settings);
       return response.data;
@@ -91,7 +91,7 @@ export const settingsApi = {
     }
   },
 
-  save: async (settings) => {
+  save: async (settings: any): Promise<any> => {
     try {
       const response = await api.post(endpoints.settings, settings);
       return response.data;
@@ -104,7 +104,7 @@ export const settingsApi = {
 
 // Resolver related API calls
 export const resolversApi = {
-  fetch: async () => {
+  fetch: async (): Promise<any> => {
     try {
       const response = await api.get(endpoints.resolvers);
       return response.data;
@@ -114,7 +114,7 @@ export const resolversApi = {
     }
   },
 
-  save: async (resolvers) => {
+  save: async (resolvers: any): Promise<any> => {
     try {
       const response = await api.post(endpoints.resolvers, resolvers);
       return response.data;
@@ -127,7 +127,7 @@ export const resolversApi = {
 
 // Blocklist related API calls
 export const blocklistsApi = {
-  fetch: async (type = 'blacklist') => {
+  fetch: async (type: string = 'blacklist'): Promise<any> => {
     try {
       const response = await api.get(`${endpoints.blocklists}?type=${type}`);
       
@@ -153,7 +153,7 @@ export const blocklistsApi = {
     }
   },
 
-  save: async (data) => {
+  save: async (data: { blocklists: string[]; type: string }): Promise<any> => {
     try {
       const { blocklists, type = 'blacklist' } = data;
       
@@ -182,7 +182,7 @@ export const blocklistsApi = {
 
 // Add metrics API
 export const metricsApi = {
-  fetch: async () => {
+  fetch: async (): Promise<any> => {
     try {
       const response = await api.get('/metrics');
       return response.data;
@@ -195,13 +195,13 @@ export const metricsApi = {
 
 // Add service control API
 export const serviceApi = {
-  getStatus: async () => {
+  getStatus: async (): Promise<any> => {
     const response = await fetch(`${API_CONFIG.BASE_URL}/service/status`);
     if (!response.ok) throw new Error('Failed to get service status');
     return response.json();
   },
 
-  control: async (action) => {
+  control: async (action: string): Promise<any> => {
     const response = await fetch(`${API_CONFIG.BASE_URL}/service`, {
       method: 'POST',
       headers: {
@@ -213,7 +213,7 @@ export const serviceApi = {
     return response.json();
   },
 
-  getMetrics: async () => {
+  getMetrics: async (): Promise<any> => {
     const response = await fetch(`${API_CONFIG.BASE_URL}/service/metrics`);
     if (!response.ok) throw new Error('Failed to get service metrics');
     return response.json();

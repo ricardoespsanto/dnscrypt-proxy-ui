@@ -25,10 +25,52 @@ import {
 } from '@mui/material';
 import { Save as SaveIcon, Refresh as RefreshIcon } from '@mui/icons-material';
 import { settingsApi, resolversApi } from '../services/api.ts';
-import { DEFAULT_SETTINGS, LOG_LEVELS } from '../config/defaults';
+import { DEFAULT_SETTINGS, LOG_LEVELS } from '../config/defaults.ts';
+
+interface SettingFieldConfig {
+  label: string;
+  type: string;
+  description: string;
+  options?: string[];
+}
+
+interface SettingSectionConfig {
+  label: string;
+  fields: Record<string, SettingFieldConfig>;
+}
+
+interface SettingsConfig {
+  network: SettingSectionConfig;
+  server: SettingSectionConfig;
+  cache: SettingSectionConfig;
+  log: SettingSectionConfig;
+}
+
+interface AppSettings {
+  listen_addresses: string[];
+  max_clients: number;
+  ipv4_servers: boolean;
+  ipv6_servers: boolean;
+  block_ipv6: boolean;
+  dnscrypt_servers: boolean;
+  doh_servers: boolean;
+  require_dnssec: boolean;
+  require_nolog: boolean;
+  require_nofilter: boolean;
+  ignore_system_dns: boolean;
+  cache: boolean;
+  cache_size: number;
+  cache_ttl_min: number;
+  cache_ttl_max: number;
+  netprobe_timeout: number;
+  log_level: string;
+  log_file: string;
+  // Add other settings properties as needed
+  [key: string]: any; // For dynamic access
+}
 
 // Define a single source of truth for settings
-const SETTINGS = {
+const SETTINGS: SettingsConfig = {
   network: {
     label: 'Network Settings',
     fields: {
@@ -146,18 +188,18 @@ const Settings = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
-  const [settings, setSettings] = useState({ ...DEFAULT_SETTINGS });
-  const [availableResolvers, setAvailableResolvers] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
+  const [settings, setSettings] = useState<AppSettings>({ ...DEFAULT_SETTINGS });
+  const [availableResolvers, setAvailableResolvers] = useState<string[]>([]);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string>('');
+  const [success, setSuccess] = useState<string>('');
 
   useEffect(() => {
     loadSettings();
     loadResolvers();
   }, []);
 
-  const loadSettings = async () => {
+  const loadSettings = async (): Promise<void> => {
     try {
       setLoading(true);
       const response = await settingsApi.fetch();
@@ -171,7 +213,7 @@ const Settings = () => {
     }
   };
 
-  const loadResolvers = async () => {
+  const loadResolvers = async (): Promise<void> => {
     try {
       const response = await resolversApi.fetch();
       setAvailableResolvers(
@@ -183,7 +225,7 @@ const Settings = () => {
     }
   };
 
-  const handleSave = async () => {
+  const handleSave = async (): Promise<void> => {
     try {
       setLoading(true);
       await settingsApi.save(settings);
@@ -197,24 +239,24 @@ const Settings = () => {
     }
   };
 
-  const handleChange = (field) => (event) => {
+  const handleChange = (field: keyof AppSettings) => (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | { name?: string; value: unknown }>): void => {
     const value = event.target.type === 'checkbox' ? event.target.checked : event.target.value;
     setSettings((prev) => ({ ...prev, [field]: value }));
   };
 
-  const handleMultipleResolverChange = (field) => (event) => {
+  const handleMultipleResolverChange = (field: keyof AppSettings) => (event: SelectChangeEvent<string[]>): void => {
     const value = event.target.value || [];
     setSettings((prev) => ({ ...prev, [field]: value }));
   };
 
-  const handleBooleanChange = (key) => (event) => {
+  const handleBooleanChange = (key: keyof AppSettings) => (event: React.ChangeEvent<HTMLInputElement>): void => {
     setSettings(prev => ({
       ...prev,
       [key]: Boolean(event.target.checked)
     }));
   };
 
-  const renderField = (section, field, config) => {
+  const renderField = (section: string, field: string, config: SettingFieldConfig): JSX.Element => {
     const value = settings[field];
     const commonProps = {
       fullWidth: true,

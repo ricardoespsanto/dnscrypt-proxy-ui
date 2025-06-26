@@ -24,13 +24,19 @@ import {
   Close as CloseIcon,
 } from '@mui/icons-material';
 
+interface MenuItem {
+  path: string;
+  icon: JSX.Element;
+  label: string;
+}
+
 const Sidebar = () => {
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
   const location = useLocation();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
-  const menuItems = [
+  const menuItems: MenuItem[] = [
     { path: '/', icon: <DashboardIcon />, label: 'Dashboard' },
     { path: '/resolvers', icon: <DnsIcon />, label: 'Resolvers' },
     { path: '/blocklists', icon: <BlockIcon />, label: 'Denylists & Allowlists' },

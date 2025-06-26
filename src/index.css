@@ -5,6 +5,8 @@
 /* Custom styles */
 body {
   font-family: 'Inter', sans-serif;
+  margin: 0;
+  padding: 0;
 }
 
 /* Custom scrollbar for webkit browsers */
@@ -15,12 +17,11 @@ body {
 
 ::-webkit-scrollbar-track {
   background: #f1f1f1;
-  border-radius: 10px;
 }
 
 ::-webkit-scrollbar-thumb {
   background: #888;
-  border-radius: 10px;
+  border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
@@ -62,8 +63,6 @@ body {
 
 /* Base styles */
 body {
-  margin: 0;
-  padding: 0;
   background-color: #f5f7fa;
   color: var(--dark);
   line-height: 1.6;

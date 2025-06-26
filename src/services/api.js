@@ -8,6 +8,7 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  withCredentials: true
 });
 
 // Request interceptor
@@ -46,6 +47,9 @@ api.interceptors.response.use(
           break;
       }
     }
+    if (error.response?.status === 429) {
+      console.error('Rate limit exceeded. Please try again later.');
+    }
     return Promise.reject(error);
   }
 );
@@ -60,26 +64,18 @@ const endpoints = {
 
 // Log related API calls
 export const logsApi = {
-  fetch: async (limit = 100) => {
-    try {
-      const response = await api.get(`${endpoints.logs}?limit=${limit}`);
-      return response.data;
-    } catch (error) {
-      console.error('Error fetching logs:', error);
-      throw new Error('Failed to fetch logs');
-    }
+  fetch: async () => {
+    const response = await axios.get('/api/logs');
+    return response.data;
   },
-
+  getLogs: async (limit) => {
+    const response = await axios.get(`/api/logs?limit=${limit}`);
+    return response.data;
+  },
   clear: async () => {
-    try {
-      const response = await api.delete(endpoints.logs);
-      return response.data;
-    } catch (error) {
-      console.error('Error clearing logs:', error);
-      throw new Error('Failed to clear logs');
-    }
+    const response = await axios.delete('/api/logs');
+    return response.data;
   },
-
   getLevels: () => ['emerg', 'alert', 'crit', 'error', 'warn', 'notice', 'info', 'debug'],
 };
 
@@ -145,6 +141,11 @@ export const blocklistsApi = {
         response.data.blocklists = [];
       }
       
+      // Ensure whitelist is an array
+      if (!Array.isArray(response.data.whitelist)) {
+        response.data.whitelist = [];
+      }
+      
       return response.data;
     } catch (error) {
       console.error(`Error fetching ${type}:`, error);
@@ -154,7 +155,7 @@ export const blocklistsApi = {
 
   save: async (data) => {
     try {
-      const { blocklists, type } = data;
+      const { blocklists, type = 'blacklist' } = data;
       
       // Validate input data
       if (!Array.isArray(blocklists)) {

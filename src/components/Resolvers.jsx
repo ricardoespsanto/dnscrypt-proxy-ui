@@ -349,8 +349,8 @@ const Resolvers = () => {
                   currentResolver.server = currentServer;
                   currentResolver.publicKey = currentPublicKey;
                   currentResolver.provider = currentProvider || currentResolver.provider;
-                  importedResolvers.push(currentResolver);
-                }
+                importedResolvers.push(currentResolver);
+              }
               }
               
               const name = trimmedLine.substring(3).trim();
@@ -384,8 +384,8 @@ const Resolvers = () => {
                 currentPublicKey = trimmedLine.split(':')[1].trim();
               } else if (trimmedLine.startsWith('Provider:')) {
                 currentProvider = trimmedLine.split(':')[1].trim();
-              }
             }
+          }
           }
           
           if (currentResolver && currentServer) {
@@ -757,7 +757,7 @@ const Resolvers = () => {
           </Snackbar>
 
           <Grid container spacing={isMobile ? 2 : 3}>
-            <Grid item xs={12} md={4}>
+            <Grid>
               <TextField
                 fullWidth
                 label="Search Resolvers"
@@ -766,7 +766,7 @@ const Resolvers = () => {
                 size={isMobile ? 'small' : 'medium'}
               />
             </Grid>
-            <Grid item xs={12} md={4}>
+            <Grid>
               <FormControl fullWidth size={isMobile ? 'small' : 'medium'}>
                 <InputLabel>Protocol</InputLabel>
                 <Select
@@ -780,7 +780,7 @@ const Resolvers = () => {
                 </Select>
               </FormControl>
             </Grid>
-            <Grid item xs={12} md={4}>
+            <Grid>
               <FormControl fullWidth size={isMobile ? 'small' : 'medium'}>
                 <InputLabel>Sort By</InputLabel>
                 <Select
@@ -801,7 +801,7 @@ const Resolvers = () => {
             <Typography variant="subtitle2" gutterBottom>Features Filter:</Typography>
             <Grid container spacing={1}>
               {Object.entries(FEATURES).map(([feature, { label }]) => (
-                <Grid item key={feature}>
+                <Grid key={feature}>
                   <FormControlLabel
                     control={
                       <Checkbox
@@ -997,23 +997,23 @@ const Resolvers = () => {
             )}
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
               {Object.entries(FEATURES).map(([feature, { label, description }]) => (
-                <FormControlLabel
+              <FormControlLabel
                   key={feature}
-                  control={
-                    <Switch
+                control={
+                  <Switch
                       checked={newResolver.features[feature]}
-                      onChange={(e) => setNewResolver({
-                        ...newResolver,
+                    onChange={(e) => setNewResolver({
+                      ...newResolver,
                         features: { ...newResolver.features, [feature]: e.target.checked }
-                      })}
-                    />
-                  }
+                    })}
+                  />
+                }
                   label={
                     <Tooltip title={description}>
                       <span>{label}</span>
                     </Tooltip>
                   }
-                />
+                  />
               ))}
             </Box>
           </Box>

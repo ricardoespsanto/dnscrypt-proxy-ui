@@ -1,6 +1,5 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
-import { ThemeProvider, createTheme } from '@mui/material'
-import CssBaseline from '@mui/material/CssBaseline'
+import { ThemeProvider, createTheme, Box, CssBaseline } from '@mui/material'
 import Sidebar from './components/Sidebar'
 import Dashboard from './components/Dashboard'
 import Resolvers from './components/Resolvers'
@@ -27,9 +26,17 @@ function App() {
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <Router>
-        <div className="bg-gray-100 text-gray-800 flex h-screen overflow-hidden">
+        <Box sx={{ display: 'flex', minHeight: '100vh' }}>
           <Sidebar />
-          <main className="flex-1 md:ml-64 p-6 overflow-y-auto">
+          <Box
+            component="main"
+            sx={{
+              flexGrow: 1,
+              p: 3,
+              width: { md: `calc(100% - 240px)` },
+              ml: { md: '240px' },
+            }}
+          >
             <Routes>
               <Route path="/" element={<Dashboard />} />
               <Route path="/resolvers" element={<Resolvers />} />
@@ -39,8 +46,8 @@ function App() {
               <Route path="/about" element={<About />} />
               <Route path="/service" element={<ServiceManager />} />
             </Routes>
-          </main>
-        </div>
+          </Box>
+        </Box>
       </Router>
     </ThemeProvider>
   )

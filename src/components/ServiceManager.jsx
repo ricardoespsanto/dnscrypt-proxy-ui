@@ -42,11 +42,12 @@ const ServiceManager = () => {
   const loadServiceStatus = async () => {
     try {
       const response = await serviceApi.getStatus();
-      setStatus(response.status);
+      setStatus(response.status || 'unknown');
       setMetrics(response.metrics || metrics);
-      setServiceManager(response.serviceManager);
+      setServiceManager(response.serviceManager || 'unknown');
     } catch (err) {
       console.error('Error loading service status:', err);
+      setStatus('unknown');
     }
   };
 
@@ -95,7 +96,7 @@ const ServiceManager = () => {
       <Card>
         <CardContent>
           <Grid container spacing={3}>
-            <Grid item xs={12}>
+            <Grid>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                 <Typography variant="h5" component="h2">
                   Service Management
@@ -132,7 +133,7 @@ const ServiceManager = () => {
               </Box>
             </Grid>
 
-            <Grid item xs={12}>
+            <Grid>
               <Paper
                 sx={{
                   p: 2,
@@ -164,23 +165,23 @@ const ServiceManager = () => {
             </Grid>
 
             {serviceManager === 'unknown' && (
-              <Grid item xs={12}>
+              <Grid>
                 <Alert severity="warning">
                   Service management is not supported on this system. The detected service manager is not supported.
                 </Alert>
               </Grid>
             )}
 
-            <Grid item xs={12}>
+            <Grid>
               <Divider />
             </Grid>
 
-            <Grid item xs={12}>
+            <Grid>
               <Typography variant="h6" gutterBottom>
                 System Metrics
               </Typography>
               <Grid container spacing={2}>
-                <Grid item xs={12} sm={6} md={3}>
+                <Grid>
                   <Paper sx={{ p: 2, textAlign: 'center' }}>
                     <Typography variant="subtitle2" color="text.secondary">
                       Uptime
@@ -190,7 +191,7 @@ const ServiceManager = () => {
                     </Typography>
                   </Paper>
                 </Grid>
-                <Grid item xs={12} sm={6} md={3}>
+                <Grid>
                   <Paper sx={{ p: 2, textAlign: 'center' }}>
                     <Typography variant="subtitle2" color="text.secondary">
                       Memory Usage
@@ -200,7 +201,7 @@ const ServiceManager = () => {
                     </Typography>
                   </Paper>
                 </Grid>
-                <Grid item xs={12} sm={6} md={3}>
+                <Grid>
                   <Paper sx={{ p: 2, textAlign: 'center' }}>
                     <Typography variant="subtitle2" color="text.secondary">
                       CPU Usage
@@ -210,7 +211,7 @@ const ServiceManager = () => {
                     </Typography>
                   </Paper>
                 </Grid>
-                <Grid item xs={12} sm={6} md={3}>
+                <Grid>
                   <Paper sx={{ p: 2, textAlign: 'center' }}>
                     <Typography variant="subtitle2" color="text.secondary">
                       Active Connections

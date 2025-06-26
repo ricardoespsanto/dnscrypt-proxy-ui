@@ -39,8 +39,8 @@ const Blocklists = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
-  const [denylist, setDenylist] = useState([]);
-  const [allowlist, setAllowlist] = useState([]);
+  const [blocklists, setBlocklists] = useState([]);
+  const [whitelist, setWhitelist] = useState([]);
   const [activeTab, setActiveTab] = useState('denylist');
   const [error, setError] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -49,21 +49,26 @@ const Blocklists = () => {
   const [openDialog, setOpenDialog] = useState(false);
   const [newDomain, setNewDomain] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+  const [loading, setLoading] = useState(true);
 
   const fetchData = useCallback(async () => {
     try {
+      setLoading(true);
       setError(null);
       
       // Fetch lists sequentially to avoid race conditions
-      const denylistResponse = await blocklistsApi.fetch('blacklist');
-      const allowlistResponse = await blocklistsApi.fetch('whitelist');
+      console.log('Fetching blocklists...');
+      const response = await blocklistsApi.fetch();
+      console.log('Blocklists response:', response);
 
       // Update both states in a single render cycle
-      setDenylist(Array.isArray(denylistResponse.blocklists) ? denylistResponse.blocklists : []);
-      setAllowlist(Array.isArray(allowlistResponse.blocklists) ? allowlistResponse.blocklists : []);
+      setBlocklists(response.blocklists || []);
+      setWhitelist(response.whitelist || []);
     } catch (error) {
       console.error('Error fetching data:', error);
       setError(error.message || 'Failed to fetch domain lists');
+    } finally {
+      setLoading(false);
     }
   }, []); // Empty dependency array since it doesn't depend on any props or state
 
@@ -78,7 +83,7 @@ const Blocklists = () => {
       setSaveError(null);
       setSaveSuccess(false);
 
-      const currentList = activeTab === 'denylist' ? denylist : allowlist;
+      const currentList = activeTab === 'denylist' ? blocklists : whitelist;
       const apiType = activeTab === 'denylist' ? 'blacklist' : 'whitelist';
 
       console.log(`Saving ${apiType} data:`, currentList);
@@ -110,12 +115,12 @@ const Blocklists = () => {
 
     const newDomainTrimmed = newDomain.trim();
     if (activeTab === 'denylist') {
-      const newDenylists = [...denylist, newDomainTrimmed];
-      setDenylist(newDenylists);
+      const newDenylists = [...blocklists, newDomainTrimmed];
+      setBlocklists(newDenylists);
       handleSave();
     } else {
-      const newAllowlist = [...allowlist, newDomainTrimmed];
-      setAllowlist(newAllowlist);
+      const newAllowlist = [...whitelist, newDomainTrimmed];
+      setWhitelist(newAllowlist);
       handleSave();
     }
     setNewDomain('');
@@ -124,14 +129,14 @@ const Blocklists = () => {
 
   const handleDeleteDomain = (index) => {
     if (activeTab === 'denylist') {
-      const newDenylists = [...denylist];
+      const newDenylists = [...blocklists];
       newDenylists.splice(index, 1);
-      setDenylist(newDenylists);
+      setBlocklists(newDenylists);
       handleSave();
     } else {
-      const newAllowlist = [...allowlist];
+      const newAllowlist = [...whitelist];
       newAllowlist.splice(index, 1);
-      setAllowlist(newAllowlist);
+      setWhitelist(newAllowlist);
       handleSave();
     }
   };
@@ -140,7 +145,7 @@ const Blocklists = () => {
     setActiveTab(newValue);
   };
 
-  const currentList = activeTab === 'denylist' ? denylist : allowlist;
+  const currentList = activeTab === 'denylist' ? blocklists : whitelist;
   const filteredDomains = currentList.filter(domain =>
     domain.toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -262,7 +267,7 @@ const Blocklists = () => {
           </Tabs>
 
           <Grid container spacing={isMobile ? 2 : 3}>
-            <Grid item xs={12}>
+            <Grid>
               <TextField
                 fullWidth
                 label="Search Domains"

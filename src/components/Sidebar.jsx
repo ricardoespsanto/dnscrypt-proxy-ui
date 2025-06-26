@@ -1,6 +1,18 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
+  Box,
+  Drawer,
+  List,
+  ListItem,
+  ListItemIcon,
+  ListItemText,
+  IconButton,
+  Typography,
+  useTheme,
+  useMediaQuery,
+} from '@mui/material';
+import {
   Dashboard as DashboardIcon,
   Dns as DnsIcon,
   Block as BlockIcon,
@@ -8,11 +20,15 @@ import {
   List as ListIcon,
   Info as InfoIcon,
   Power as PowerIcon,
+  Menu as MenuIcon,
+  Close as CloseIcon,
 } from '@mui/icons-material';
 
 const Sidebar = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const location = useLocation();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
   const menuItems = [
     { path: '/', icon: <DashboardIcon />, label: 'Dashboard' },
@@ -24,74 +40,80 @@ const Sidebar = () => {
     { path: '/about', icon: <InfoIcon />, label: 'About' },
   ];
 
+  const drawerContent = (
+    <>
+      <Box sx={{ p: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+        <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
+          DNSCrypt UI
+        </Typography>
+        {isMobile && (
+          <IconButton onClick={() => setIsMobileMenuOpen(false)} color="inherit">
+            <CloseIcon />
+          </IconButton>
+        )}
+      </Box>
+      <List>
+        {menuItems.map((item) => (
+          <ListItem
+            key={item.path}
+            component={Link}
+            to={item.path}
+            selected={location.pathname === item.path}
+            sx={{
+              color: 'inherit',
+              textDecoration: 'none',
+              '&.Mui-selected': {
+                backgroundColor: 'rgba(255, 255, 255, 0.08)',
+              },
+              '&:hover': {
+                backgroundColor: 'rgba(255, 255, 255, 0.04)',
+              },
+            }}
+          >
+            <ListItemIcon sx={{ color: 'inherit' }}>{item.icon}</ListItemIcon>
+            <ListItemText primary={item.label} />
+          </ListItem>
+        ))}
+      </List>
+      <Box sx={{ position: 'absolute', bottom: 16, left: 16 }}>
+        <Typography variant="caption" color="text.secondary">
+          UI Version 0.1.0
+        </Typography>
+      </Box>
+    </>
+  );
+
   return (
     <>
-      <button
-        onClick={() => setIsMobileMenuOpen(true)}
-        className="md:hidden fixed top-4 left-4 z-50 p-2 bg-gray-800 text-white rounded-md"
+      {isMobile && (
+        <IconButton
+          color="inherit"
+          aria-label="open drawer"
+          edge="start"
+          onClick={() => setIsMobileMenuOpen(true)}
+          sx={{ position: 'fixed', top: 16, left: 16, zIndex: 1200 }}
+        >
+          <MenuIcon />
+        </IconButton>
+      )}
+
+      <Drawer
+        variant={isMobile ? 'temporary' : 'permanent'}
+        open={isMobile ? isMobileMenuOpen : true}
+        onClose={() => setIsMobileMenuOpen(false)}
+        sx={{
+          width: 240,
+          flexShrink: 0,
+          '& .MuiDrawer-paper': {
+            width: 240,
+            boxSizing: 'border-box',
+            backgroundColor: theme.palette.grey[900],
+            color: theme.palette.common.white,
+          },
+        }}
       >
-        <i className="fas fa-bars"></i>
-      </button>
-
-      {/* Mobile Sidebar */}
-      <div
-        className={`fixed inset-0 bg-gray-800 text-white p-6 space-y-6 z-40 transform transition-transform duration-300 ease-in-out md:hidden ${
-          isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
-        }`}
-      >
-        <div className="flex justify-between items-center mb-6">
-          <div className="text-2xl font-semibold flex items-center space-x-2">
-            <i className="fas fa-shield-alt text-sky-400"></i>
-            <span>DNSCrypt UI</span>
-          </div>
-          <button
-            onClick={() => setIsMobileMenuOpen(false)}
-            className="p-2"
-          >
-            <i className="fas fa-times"></i>
-          </button>
-        </div>
-        <nav className="space-y-2">
-          {menuItems.map((item) => (
-            <Link
-              key={item.path}
-              to={item.path}
-              className={`flex items-center space-x-3 px-4 py-2.5 rounded-lg hover:bg-gray-700 transition-colors duration-150 ${
-                location.pathname === item.path ? 'bg-blue-50 text-blue-600' : ''
-              }`}
-            >
-              <span className="mr-3">{item.icon}</span>
-              {item.label}
-            </Link>
-          ))}
-        </nav>
-      </div>
-
-      {/* Desktop Sidebar */}
-      <aside className="w-64 bg-gray-800 text-white p-6 space-y-6 fixed top-0 left-0 h-full shadow-lg hidden md:block">
-        <div className="text-2xl font-semibold flex items-center space-x-2">
-          <i className="fas fa-shield-alt text-sky-400"></i>
-          <span>DNSCrypt UI</span>
-        </div>
-
-        <nav className="space-y-2">
-          {menuItems.map((item) => (
-            <Link
-              key={item.path}
-              to={item.path}
-              className={`flex items-center space-x-3 px-4 py-2.5 rounded-lg hover:bg-gray-700 transition-colors duration-150 ${
-                location.pathname === item.path ? 'bg-blue-50 text-blue-600' : ''
-              }`}
-            >
-              <span className="mr-3">{item.icon}</span>
-              {item.label}
-            </Link>
-          ))}
-        </nav>
-        <div className="absolute bottom-4 left-4 text-xs text-gray-500">
-          UI Version 0.1.0
-        </div>
-      </aside>
+        {drawerContent}
+      </Drawer>
     </>
   );
 };

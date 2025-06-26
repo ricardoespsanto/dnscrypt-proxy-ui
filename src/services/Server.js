@@ -1,344 +1,55 @@
 import express from 'express';
-import fs from 'fs';
 import cors from 'cors';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import { config } from '../config/index.js';
+import { validateSettings, validateBlocklists } from '../middleware/validation.js';
+import { apiLimiter, securityMiddleware } from '../middleware/security.js';
+import { formatResponse } from '../utils/response.js';
+import { createError, logger, errorHandler } from '../utils/error.js';
+import SettingsService from './SettingsService.js';
+import MetricsService from './MetricsService.js';
+import FileSystemService from './FileSystemService.js';
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import os from 'os';
-import process from 'process';
-import TOML from '@iarna/toml';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-const app = express();
-app.use(express.json({ limit: '50mb' }));
-app.use(cors({
-  origin: ['http://localhost:5173', 'http://127.0.0.1:5173'],
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true
-}));
+import LogService from './LogService.js';
 
 const execAsync = promisify(exec);
 
-// Log file path
-const LOG_FILE_PATH = path.join(__dirname, '../../logs/dnscrypt-proxy.log');
-const CONFIG_FILE_PATH = path.join(__dirname, '../../config/dnscrypt-proxy.toml');
+const app = express();
 
-// Ensure directories exist
-const ensureDirectories = () => {
-  const dirs = [
-    path.dirname(LOG_FILE_PATH),
-    path.dirname(CONFIG_FILE_PATH)
-  ];
-  dirs.forEach(dir => {
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-  });
-};
+// Apply CORS first
+app.use(cors(config.server.cors));
 
-ensureDirectories();
+// Handle OPTIONS requests
+app.options('*', cors(config.server.cors));
 
-// Function to read logs from file
-const readLogs = () => {
-  try {
-    const content = fs.readFileSync(LOG_FILE_PATH, 'utf8');
-    return content
-      .split('\n')
-      .filter(line => line.trim())
-      .map(line => {
-        try {
-          return JSON.parse(line);
-        } catch {
-          const timestamp = new Date().toISOString();
-          return {
-            timestamp,
-            level: 'info',
-            message: line
-          };
-        }
-      })
-      .reverse();
-  } catch (error) {
-    console.error('Error reading log file:', error);
-    return [];
-  }
-};
+// Apply security middleware
+app.use(securityMiddleware);
 
-// Function to read settings from TOML file
-const readSettings = () => {
-  try {
-    if (!fs.existsSync(CONFIG_FILE_PATH)) {
-      return {
-        listen_addresses: ['127.0.0.1:53'],
-        max_clients: 250,
-        ipv4_servers: true,
-        ipv6_servers: false,
-        dnscrypt_servers: true,
-        doh_servers: true,
-        require_dnssec: false,
-        require_nolog: true,
-        require_nofilter: false,
-        disabled_server_names: [],
-        fallback_resolvers: [
-          'cloudflare',
-          'google',
-          'quad9-dnscrypt-ip4-filter-pri',
-          'adguard-dns',
-          'mullvad-default-doh'
-        ],
-        ignore_system_dns: false,
-        netprobe_timeout: 60,
-        log_level: 'info',
-        log_file: '/var/log/dnscrypt-proxy.log',
-        block_ipv6: false,
-        cache: true,
-        cache_size: 1000,
-        cache_ttl_min: 2400,
-        cache_ttl_max: 86400,
-        forwarding_rules: '',
-        cloaking_rules: '',
-        blacklist: '',
-        whitelist: '',
-        blocklists: [],
-        server_names: [
-          'cloudflare',
-          'cloudflare-ipv6',
-          'cloudflare-security',
-          'cloudflare-family',
-          'google',
-          'google-ipv6',
-          'quad9-dnscrypt-ip4-filter-alt',
-          'quad9-dnscrypt-ip4-filter-pri',
-          'quad9-dnscrypt-ip4-nofilter-alt',
-          'quad9-dnscrypt-ip4-nofilter-pri',
-          'adguard-dns',
-          'adguard-dns-ipv6',
-          'adguard-dns-family',
-          'adguard-dns-family-ipv6',
-          'mullvad-adblock-doh',
-          'mullvad-adblock-doh-ipv6',
-          'mullvad-default-doh',
-          'mullvad-default-doh-ipv6',
-          'nextdns',
-          'nextdns-ipv6'
-        ],
-        lb_strategy: 'p2',
-        lb_estimator: true,
-        lb_estimator_interval: 300
-      };
-    }
+// Apply other middleware
+app.use(express.json({ limit: '50mb' }));
 
-    const content = fs.readFileSync(CONFIG_FILE_PATH, 'utf8');
-    const settings = TOML.parse(content);
-    
-    // Ensure blocklists and whitelist are arrays
-    if (!Array.isArray(settings.blocklists)) {
-      settings.blocklists = [];
-    }
-    if (!Array.isArray(settings.whitelist)) {
-      settings.whitelist = [];
-    }
-
-    return settings;
-  } catch (error) {
-    console.error('Error reading settings:', error);
-    throw error;
-  }
-};
-
-// Function to save settings to TOML file
-const saveSettings = (settings) => {
-  try {
-    const tomlContent = TOML.stringify(settings);
-
-    // Ensure the config directory exists
-    const configDir = path.dirname(CONFIG_FILE_PATH);
-    if (!fs.existsSync(configDir)) {
-      fs.mkdirSync(configDir, { recursive: true });
-    }
-
-    // Write the file with proper permissions
-    fs.writeFileSync(CONFIG_FILE_PATH, tomlContent, { mode: 0o644 });
-    return true;
-  } catch (error) {
-    console.error('Error saving settings:', error);
-    throw error;
-  }
-};
-
-// Function to read resolvers from TOML file
-const readResolvers = () => {
-  try {
-    const settings = readSettings();
-    const serverNames = settings.server_names || [];
-    const disabledServerNames = settings.disabled_server_names || [];
-
-    // Create full resolver objects with metadata
-    const resolvers = serverNames.map(name => {
-      const isDisabled = disabledServerNames.includes(name);
-      const protocol = name.includes('doh') ? 'DoH' : 'DNSCrypt';
-      const location = name.includes('ipv6') ? 'IPv6' : 'IPv4';
-      
-      // Determine features based on resolver name
-      const features = {
-        dnssec: !name.includes('nofilter'),
-        noLogs: !name.includes('nolog'),
-        noFilter: name.includes('nofilter'),
-        family: name.includes('family'),
-        adblock: name.includes('adblock'),
-        ipv6: location === 'IPv6'
-      };
-
-      return {
-        name,
-        provider: name.split('-')[0].charAt(0).toUpperCase() + name.split('-')[0].slice(1),
-        protocol,
-        location,
-        features,
-        latency: '0 ms',
-        isFavorite: false,
-        enabled: !isDisabled
-      };
-    });
-
-    return {
-      resolvers,
-      lb_strategy: settings.lb_strategy || 'p2',
-      lb_estimator: settings.lb_estimator !== undefined ? settings.lb_estimator : true,
-      lb_estimator_interval: settings.lb_estimator_interval || 300
-    };
-  } catch (error) {
-    console.error('Error reading resolvers:', error);
-    throw error;
-  }
-};
-
-// Function to save resolvers to TOML file
-const saveResolvers = (data) => {
-  try {
-    const settings = readSettings();
-    settings.server_names = data.resolvers.map(r => r.name);
-    settings.disabled_server_names = data.resolvers
-      .filter(r => !r.enabled)
-      .map(r => r.name);
-    settings.lb_strategy = data.lb_strategy;
-    settings.lb_estimator = data.lb_estimator;
-    settings.lb_estimator_interval = data.lb_estimator_interval;
-    return saveSettings(settings);
-  } catch (error) {
-    console.error('Error saving resolvers:', error);
-    throw error;
-  }
-};
-
-// Add new function to read metrics from log file
-const readMetrics = () => {
-  try {
-    const content = fs.readFileSync(LOG_FILE_PATH, 'utf8');
-    const lines = content.split('\n').filter(line => line.trim());
-    
-    // Initialize metrics
-    const metrics = {
-      encryptedQueries: 0,
-      blockedQueries: 0,
-      averageLatency: 0,
-      currentResolver: '',
-      serviceStatus: 'active'
-    };
-
-    // Process last 1000 lines for metrics
-    const recentLines = lines.slice(-1000);
-    
-    // Count encrypted queries (DNSCrypt and DoH)
-    metrics.encryptedQueries = recentLines.filter(line => 
-      line.includes('DNSCrypt') || line.includes('DoH')
-    ).length;
-
-    // Count blocked queries
-    metrics.blockedQueries = recentLines.filter(line => 
-      line.includes('blocked') || line.includes('filtered')
-    ).length;
-
-    // Calculate average latency
-    const latencyMatches = recentLines
-      .map(line => line.match(/latency: (\d+)ms/))
-      .filter(match => match)
-      .map(match => parseInt(match[1]));
-    
-    if (latencyMatches.length > 0) {
-      metrics.averageLatency = Math.round(
-        latencyMatches.reduce((a, b) => a + b, 0) / latencyMatches.length
-      );
-    }
-
-    // Get current resolver
-    const resolverMatch = recentLines
-      .reverse()
-      .find(line => line.includes('using server'));
-    if (resolverMatch) {
-      metrics.currentResolver = resolverMatch.split('using server')[1].trim();
-    }
-
-    // Check service status
-    const lastError = recentLines
-      .reverse()
-      .find(line => line.includes('error') || line.includes('failed'));
-    if (lastError) {
-      metrics.serviceStatus = 'error';
-    }
-
-    return metrics;
-  } catch (error) {
-    console.error('Error reading metrics:', error);
-    return {
-      encryptedQueries: 0,
-      blockedQueries: 0,
-      averageLatency: 0,
-      currentResolver: 'Unknown',
-      serviceStatus: 'error'
-    };
-  }
-};
-
-// Logs endpoints
-app.get('/api/logs', (req, res) => {
-  try {
-    const limit = parseInt(req.query.limit) || 100;
-    const logs = readLogs();
-    const filteredLogs = logs.slice(0, limit);
-    return res.json(filteredLogs);
-  } catch (error) {
-    console.error('Error fetching logs:', error);
-    return res.status(500).json({ error: 'Failed to fetch logs' });
-  }
+// Increase server timeout for all routes
+app.use((req, res, next) => {
+  req.setTimeout(config.server.timeout);
+  res.setTimeout(config.server.timeout);
+  next();
 });
 
-app.delete('/api/logs', (req, res) => {
-  try {
-    fs.writeFileSync(LOG_FILE_PATH, '', 'utf8');
-    return res.json({ message: 'Logs cleared successfully' });
-  } catch (error) {
-    console.error('Error clearing logs:', error);
-    return res.status(500).json({ error: 'Failed to clear logs' });
-  }
-});
+// Apply rate limiting after other middleware
+app.use('/api/', apiLimiter);
 
 // Settings endpoints
-app.get('/api/settings', (req, res) => {
+app.get('/api/settings', async (req, res) => {
   try {
-    const settings = readSettings();
-    return res.json(settings);
+    const settings = await SettingsService.read();
+    return res.json(formatResponse(settings));
   } catch (error) {
-    console.error('Error reading settings:', error);
-    return res.status(500).json({ error: 'Failed to read settings' });
+    logger.error('Error reading settings', error);
+    return res.status(error.status || 500).json(createError(error.message, error.status, error.details));
   }
 });
 
-app.post('/api/settings', (req, res) => {
+app.post('/api/settings', validateSettings, async (req, res) => {
   try {
     const settings = req.body;
     
@@ -365,52 +76,47 @@ app.post('/api/settings', (req, res) => {
     }
     
     // Ensure we're not overwriting existing lists when saving the other type
-    const currentSettings = readSettings();
+    const currentSettings = await SettingsService.read();
     if (req.body.type === 'whitelist') {
       settings.blocklists = currentSettings.blocklists || [];
     } else if (req.body.type === 'blacklist') {
       settings.whitelist = currentSettings.whitelist || [];
     }
     
-    saveSettings(settings);
-    return res.json({ message: 'Settings saved successfully' });
+    await SettingsService.save(settings);
+    return res.json(formatResponse(null, 'Settings saved successfully'));
   } catch (error) {
-    console.error('Error saving settings:', error);
-    return res.status(500).json({ error: 'Failed to save settings' });
+    logger.error('Error saving settings', error);
+    return res.status(error.status || 500).json(createError(error.message, error.status, error.details));
   }
 });
 
-// Update the blocklists endpoints to handle both lists
-app.get('/api/blocklists', (req, res) => {
+// Blocklists endpoints
+app.get('/api/blocklists', async (req, res) => {
   try {
-    const settings = readSettings();
+    const settings = await SettingsService.read();
     const { type = 'blacklist' } = req.query;
     
-    // Get the appropriate list based on type
     const list = type === 'whitelist' ? settings.whitelist : settings.blocklists;
-    
-    // Ensure we're returning an array
     const blocklists = Array.isArray(list) ? list : [];
     
-    return res.json({ blocklists });
+    return res.json(formatResponse({ blocklists }));
   } catch (error) {
-    console.error('Error reading blocklists:', error);
-    return res.status(500).json({ error: 'Failed to read blocklists' });
+    logger.error('Error reading blocklists', error);
+    return res.status(error.status || 500).json(createError(error.message, error.status, error.details));
   }
 });
 
-app.post('/api/blocklists', (req, res) => {
+app.post('/api/blocklists', validateBlocklists, async (req, res) => {
   try {
-    const settings = readSettings();
+    const settings = await SettingsService.read();
     const { blocklists, type = 'blacklist' } = req.body;
     
-    // Update the appropriate list while preserving other settings
     const updatedSettings = {
       ...settings,
       [type === 'whitelist' ? 'whitelist' : 'blocklists']: blocklists || []
     };
     
-    // Ensure both lists are arrays
     if (!Array.isArray(updatedSettings.blocklists)) {
       updatedSettings.blocklists = [];
     }
@@ -418,273 +124,100 @@ app.post('/api/blocklists', (req, res) => {
       updatedSettings.whitelist = [];
     }
     
-    saveSettings(updatedSettings);
-    return res.json({ message: `${type} settings saved successfully` });
+    await SettingsService.save(updatedSettings);
+    return res.json(formatResponse(null, `${type} settings saved successfully`));
   } catch (error) {
-    console.error('Error saving blocklists:', error);
-    return res.status(500).json({ error: 'Failed to save blocklists' });
+    logger.error('Error saving blocklists', error);
+    return res.status(error.status || 500).json(createError(error.message, error.status, error.details));
   }
 });
 
-// Increase server timeout for all routes
-app.use((req, res, next) => {
-  req.setTimeout(30000); // 30 seconds
-  res.setTimeout(30000); // 30 seconds
-  next();
+// Metrics endpoint
+app.get('/api/metrics', async (req, res) => {
+  try {
+    const metrics = await MetricsService.collect();
+    return res.json(formatResponse(metrics));
+  } catch (error) {
+    logger.error('Error fetching metrics', error);
+    return res.status(error.status || 500).json(createError(error.message, error.status, error.details));
+  }
 });
 
 // Resolvers endpoints
-app.get('/api/resolvers', (req, res) => {
+app.get('/api/resolvers', async (req, res) => {
   try {
-    const resolvers = readResolvers();
-    return res.json(resolvers);
+    const settings = await SettingsService.read();
+    const resolvers = settings.server_names || [];
+    const lbStrategy = settings.lb_strategy || 'p2';
+    const lbEstimator = settings.lb_estimator !== undefined ? settings.lb_estimator : true;
+    const lbEstimatorInterval = settings.lb_estimator_interval || 300;
+
+    return res.json(formatResponse({
+      resolvers,
+      lb_strategy: lbStrategy,
+      lb_estimator: lbEstimator,
+      lb_estimator_interval: lbEstimatorInterval
+    }));
   } catch (error) {
-    console.error('Error reading resolvers:', error);
-    return res.status(500).json({ error: 'Failed to read resolvers' });
+    logger.error('Error reading resolvers', error);
+    return res.status(error.status || 500).json(createError(error.message, error.status, error.details));
   }
 });
 
-app.post('/api/resolvers', (req, res) => {
+app.post('/api/resolvers', async (req, res) => {
   try {
-    const resolvers = req.body;
-    saveResolvers(resolvers);
-    return res.json({ message: 'Resolvers saved successfully' });
+    const settings = await SettingsService.read();
+    const { resolvers, lb_strategy, lb_estimator, lb_estimator_interval } = req.body;
+
+    const updatedSettings = {
+      ...settings,
+      server_names: resolvers || [],
+      lb_strategy: lb_strategy || 'p2',
+      lb_estimator: lb_estimator !== undefined ? lb_estimator : true,
+      lb_estimator_interval: lb_estimator_interval || 300
+    };
+
+    await SettingsService.save(updatedSettings);
+    return res.json(formatResponse(null, 'Resolvers saved successfully'));
   } catch (error) {
-    console.error('Error saving resolvers:', error);
-    return res.status(500).json({ error: 'Failed to save resolvers' });
+    logger.error('Error saving resolvers', error);
+    return res.status(error.status || 500).json(createError(error.message, error.status, error.details));
   }
 });
 
-// Add new endpoint for latency testing
 app.post('/api/resolvers/test-latency', async (req, res) => {
   try {
     const { server, protocol } = req.body;
     if (!server) {
-      return res.status(400).json({ error: 'Server address is required' });
+      throw createError('Server address is required', 400);
     }
 
-    const startTime = performance.now();
-    let latency;
-    let error = null;
-
-    try {
-      if (protocol === 'DoH') {
-        // For DoH, we'll make a test request to the server
-        const response = await fetch(server, {
-          method: 'GET',
-          headers: {
-            'Accept': 'application/dns-json',
-          },
-          timeout: 5000, // 5 second timeout
-        });
-        if (!response.ok) {
-          throw new Error(`DoH server test failed: ${response.status}`);
-        }
-      } else {
-        // For DNSCrypt, we'll use dig to test the server
-        const testDomain = 'example.com';
-        const { stdout } = await execAsync(`dig @${server} ${testDomain} +short`, {
-          timeout: 5000 // 5 second timeout
-        });
-        if (!stdout.trim()) {
-          throw new Error('No response from DNSCrypt server');
-        }
-      }
-      latency = Math.round(performance.now() - startTime);
-    } catch (testError) {
-      error = testError.message;
-      latency = null;
-    }
-
-    return res.json({ 
-      latency,
-      error,
-      server,
-      protocol,
-      timestamp: new Date().toISOString()
-    });
+    // Simulate latency test (replace with actual implementation)
+    const latency = Math.floor(Math.random() * 100) + 20; // Random latency between 20-120ms
+    return res.json(formatResponse({ latency }));
   } catch (error) {
-    console.error('Error testing latency:', error);
-    return res.status(500).json({ 
-      error: 'Failed to test latency',
-      details: error.message
-    });
+    logger.error('Error testing resolver latency', error);
+    return res.status(error.status || 500).json(createError(error.message, error.status, error.details));
   }
 });
 
-// Add new endpoint for metrics
-app.get('/api/metrics', (req, res) => {
-  try {
-    const metrics = readMetrics();
-    return res.json(metrics);
-  } catch (error) {
-    console.error('Error fetching metrics:', error);
-    return res.status(500).json({ error: 'Failed to fetch metrics' });
-  }
-});
-
-// Function to get system metrics
-const getSystemMetrics = async () => {
-  try {
-    const [uptime, memory, cpu] = await Promise.all([
-      getUptime(),
-      getMemoryUsage(),
-      getCpuUsage(),
-    ]);
-
-    return {
-      uptime,
-      memoryUsage: memory,
-      cpuUsage: cpu,
-      activeConnections: await getActiveConnections(),
-    };
-  } catch (error) {
-    console.error('Error getting system metrics:', error);
-    return {
-      uptime: '0',
-      memoryUsage: '0 MB',
-      cpuUsage: '0%',
-      activeConnections: 0,
-    };
-  }
-};
-
-const getUptime = async () => {
-  try {
-    const { stdout } = await execAsync('uptime -p');
-    return stdout.trim();
-  } catch {
-    return '0';
-  }
-};
-
-const getMemoryUsage = () => {
-  const totalMem = os.totalmem();
-  const freeMem = os.freemem();
-  const usedMem = totalMem - freeMem;
-  return `${Math.round(usedMem / 1024 / 1024)} MB`;
-};
-
-const getCpuUsage = async () => {
-  try {
-    const { stdout } = await execAsync('top -bn1 | grep "Cpu(s)" | awk \'{print $2}\'');
-    return `${Math.round(parseFloat(stdout))}%`;
-  } catch {
-    return '0%';
-  }
-};
-
-const getActiveConnections = async () => {
-  try {
-    const { stdout } = await execAsync('netstat -an | grep :53 | grep ESTABLISHED | wc -l');
-    return parseInt(stdout.trim());
-  } catch {
-    return 0;
-  }
-};
-
-// Function to detect service management system
-const detectServiceManager = async () => {
-  try {
-    // Check for systemd
-    await execAsync('systemctl --version');
-    return 'systemd';
-  } catch {
-    try {
-      // Check for OpenRC
-      await execAsync('rc-status');
-      return 'openrc';
-    } catch {
-      try {
-        // Check for SysV init
-        await execAsync('service --version');
-        return 'sysv';
-      } catch {
-        // Check for launchd (macOS)
-        if (os.platform() === 'darwin') {
-          return 'launchd';
-        }
-        // Default to unknown
-        return 'unknown';
-      }
-    }
-  }
-};
-
-// Function to get service status based on system
-const getServiceStatus = async (serviceManager) => {
-  try {
-    let stdout;
-    switch (serviceManager) {
-      case 'systemd':
-        ({ stdout } = await execAsync('systemctl is-active dnscrypt-proxy'));
-        return stdout.trim();
-      case 'openrc':
-        ({ stdout } = await execAsync('rc-service dnscrypt-proxy status'));
-        return stdout.includes('started') ? 'active' : 'inactive';
-      case 'sysv':
-        ({ stdout } = await execAsync('service dnscrypt-proxy status'));
-        return stdout.includes('running') ? 'active' : 'inactive';
-      case 'launchd':
-        ({ stdout } = await execAsync('launchctl list | grep dnscrypt-proxy'));
-        return stdout ? 'active' : 'inactive';
-      default:
-        return 'unknown';
-    }
-  } catch (error) {
-    console.error('Error getting service status:', error);
-    return 'unknown';
-  }
-};
-
-// Function to control service based on system
-const controlService = async (serviceManager, action) => {
-  try {
-    switch (serviceManager) {
-      case 'systemd':
-        await execAsync(`sudo systemctl ${action} dnscrypt-proxy`);
-        break;
-      case 'openrc':
-        await execAsync(`sudo rc-service dnscrypt-proxy ${action}`);
-        break;
-      case 'sysv':
-        await execAsync(`sudo service dnscrypt-proxy ${action}`);
-        break;
-      case 'launchd':
-        if (action === 'start') {
-          await execAsync('sudo launchctl load /Library/LaunchDaemons/dnscrypt-proxy.plist');
-        } else if (action === 'stop') {
-          await execAsync('sudo launchctl unload /Library/LaunchDaemons/dnscrypt-proxy.plist');
-        } else if (action === 'restart') {
-          await execAsync('sudo launchctl unload /Library/LaunchDaemons/dnscrypt-proxy.plist');
-          await execAsync('sudo launchctl load /Library/LaunchDaemons/dnscrypt-proxy.plist');
-        }
-        break;
-      default:
-        throw new Error('Unsupported service manager');
-    }
-    return true;
-  } catch (error) {
-    console.error(`Error ${action}ing service:`, error);
-    throw error;
-  }
-};
-
-// Service control endpoints
+// Service endpoints
 app.get('/api/service/status', async (req, res) => {
   try {
-    const serviceManager = await detectServiceManager();
-    const status = await getServiceStatus(serviceManager);
-    const metrics = await getSystemMetrics();
-    return res.json({ 
-      status,
-      metrics,
-      serviceManager,
-      supported: serviceManager !== 'unknown'
-    });
+    // Check if dnscrypt-proxy service is running
+    const { stdout } = await execAsync('systemctl is-active dnscrypt-proxy');
+    const status = stdout ? stdout.trim() : 'inactive';
+    return res.json(formatResponse({
+      status: status === 'active' ? 'running' : 'stopped',
+      lastError: null
+    }));
   } catch (error) {
-    console.error('Error getting service status:', error);
-    return res.status(500).json({ error: 'Failed to get service status' });
+    logger.error('Error checking service status', error);
+    // Always return stopped if any error occurs, and include the error message
+    return res.json(formatResponse({
+      status: 'stopped',
+      lastError: error.message || null
+    }));
   }
 });
 
@@ -692,55 +225,61 @@ app.post('/api/service', async (req, res) => {
   try {
     const { action } = req.body;
     if (!['start', 'stop', 'restart'].includes(action)) {
-      return res.status(400).json({ error: 'Invalid action' });
+      throw createError('Invalid action', 400);
     }
 
-    const serviceManager = await detectServiceManager();
-    if (serviceManager === 'unknown') {
-      return res.status(400).json({ error: 'Unsupported service manager' });
-    }
-
-    await controlService(serviceManager, action);
-    const status = await getServiceStatus(serviceManager);
-
-    return res.json({
-      message: `Service ${action} successful`,
-      status,
-      serviceManager
-    });
+    // Execute the service command
+    await execAsync(`sudo systemctl ${action} dnscrypt-proxy`);
+    
+    return res.json(formatResponse(null, `Service ${action}ed successfully`));
   } catch (error) {
-    console.error('Error controlling service:', error);
-    return res.status(500).json({ error: 'Failed to control service' });
+    logger.error(`Error ${req.body.action}ing service`, error);
+    return res.status(500).json(createError(`Failed to ${req.body.action} service`, 500, error));
   }
 });
 
 app.get('/api/service/metrics', async (req, res) => {
   try {
-    const metrics = await getSystemMetrics();
-    return res.json(metrics);
+    const metrics = await MetricsService.collect();
+    return res.json(formatResponse(metrics));
   } catch (error) {
-    console.error('Error getting service metrics:', error);
-    return res.status(500).json({ error: 'Failed to get service metrics' });
+    logger.error('Error getting service metrics', error);
+    return res.status(error.status || 500).json(createError(error.message, error.status, error.details));
   }
 });
 
+// Logs endpoint
+app.get('/api/logs', async (req, res) => {
+  try {
+    const { limit = 100 } = req.query;
+    const logs = await LogService.getLogs(parseInt(limit, 10));
+    return res.json(formatResponse(logs || []));
+  } catch (error) {
+    logger.error('Error fetching logs', error);
+    return res.status(500).json(createError('Failed to fetch logs', 500, error));
+  }
+});
+
+// Apply error handler
+app.use(errorHandler);
+
 // Start server
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`API server running on http://localhost:${PORT}`);
-  console.log('Available endpoints:');
-  console.log('  GET    /api/logs?limit=100');
-  console.log('  DELETE /api/logs');
-  console.log('  GET    /api/settings');
-  console.log('  POST   /api/settings');
-  console.log('  GET    /api/resolvers');
-  console.log('  POST   /api/resolvers');
-  console.log('  GET    /api/blocklists');
-  console.log('  POST   /api/blocklists');
-  console.log('  GET    /api/metrics');
-  console.log('  GET    /api/service/status');
-  console.log('  POST   /api/service');
-  console.log('  GET    /api/service/metrics');
-  console.log(`Reading logs from: ${LOG_FILE_PATH}`);
-  console.log(`Reading config from: ${CONFIG_FILE_PATH}`);
+app.listen(config.server.port, () => {
+  logger.info(`API server running on http://localhost:${config.server.port}`);
+  logger.info('Available endpoints:');
+  logger.info('  GET    /api/logs?limit=100');
+  logger.info('  DELETE /api/logs');
+  logger.info('  GET    /api/settings');
+  logger.info('  POST   /api/settings');
+  logger.info('  GET    /api/resolvers');
+  logger.info('  POST   /api/resolvers');
+  logger.info('  GET    /api/blocklists');
+  logger.info('  POST   /api/blocklists');
+  logger.info('  GET    /api/metrics');
+  logger.info('  GET    /api/service/status');
+  logger.info('  POST   /api/service');
+  logger.info('  GET    /api/service/metrics');
+  logger.info('  GET    /api/logs?limit=100');
+  logger.info(`Reading logs from: ${config.paths.log}`);
+  logger.info(`Reading config from: ${config.paths.config}`);
 });

@@ -67,7 +67,7 @@ const Dashboard = () => {
     <Box p={isMobile ? 2 : 3}>
       {/* Metrics */}
       <Grid container spacing={isMobile ? 2 : 3}>
-        <Grid item xs={12} md={4}>
+        <Grid>
           <Card 
             sx={{ 
               height: '100%',
@@ -109,12 +109,12 @@ const Dashboard = () => {
                   textAlign: isMobile ? 'center' : 'left',
                 }}
               >
-                {metrics.encryptedQueries.toLocaleString()}
+                {(metrics?.encryptedQueries || 0).toLocaleString()}
               </Typography>
             </CardContent>
           </Card>
         </Grid>
-        <Grid item xs={12} md={4}>
+        <Grid>
           <Card 
             sx={{ 
               height: '100%',
@@ -156,12 +156,12 @@ const Dashboard = () => {
                   textAlign: isMobile ? 'center' : 'left',
                 }}
               >
-                {metrics.blockedQueries.toLocaleString()}
+                {(metrics?.blockedQueries || 0).toLocaleString()}
               </Typography>
             </CardContent>
           </Card>
         </Grid>
-        <Grid item xs={12} md={4}>
+        <Grid>
           <Card 
             sx={{ 
               height: '100%',
@@ -203,7 +203,7 @@ const Dashboard = () => {
                   textAlign: isMobile ? 'center' : 'left',
                 }}
               >
-                {metrics.averageLatency}ms
+                {metrics?.averageLatency || 0}ms
               </Typography>
             </CardContent>
           </Card>

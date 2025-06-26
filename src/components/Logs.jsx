@@ -76,18 +76,15 @@ const Logs = () => {
   const [selectedLevel, setSelectedLevel] = useState('all');
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [limit, setLimit] = useState(100);
 
   const loadLogs = async () => {
     try {
-      setLoading(true);
-      const data = await logsApi.fetch();
-      setLogs(data);
-      setError(null);
+      const response = await logsApi.getLogs(limit);
+      setLogs(response.logs || []);
     } catch (err) {
-      setError('Failed to load logs. Please try again.');
       console.error('Error loading logs:', err);
-    } finally {
-      setLoading(false);
+      setLogs([]);
     }
   };
 
@@ -158,15 +155,15 @@ const Logs = () => {
                 }
                 label="Auto Refresh"
               />
-              <Button
-                startIcon={<RefreshIcon />}
-                onClick={loadLogs}
-                disabled={loading}
-                size={isMobile ? 'small' : 'medium'}
-                fullWidth={isMobile}
-              >
-                Refresh
-              </Button>
+            <Button
+              startIcon={<RefreshIcon />}
+              onClick={loadLogs}
+              disabled={loading}
+              size={isMobile ? 'small' : 'medium'}
+              fullWidth={isMobile}
+            >
+              Refresh
+            </Button>
               <Button
                 onClick={handleClearLogs}
                 disabled={loading}
@@ -191,7 +188,7 @@ const Logs = () => {
           </Snackbar>
 
           <Grid container spacing={isMobile ? 2 : 3}>
-            <Grid item xs={12} md={6}>
+            <Grid>
               <TextField
                 fullWidth
                 label="Search Logs"
@@ -200,7 +197,7 @@ const Logs = () => {
                 size={isMobile ? 'small' : 'medium'}
               />
             </Grid>
-            <Grid item xs={12} md={6}>
+            <Grid>
               <FormControl fullWidth size={isMobile ? 'small' : 'medium'}>
                 <InputLabel>Filter</InputLabel>
                 <Select

@@ -49,7 +49,7 @@ const About = () => {
           </Typography>
 
           <Grid container spacing={isMobile ? 2 : 3}>
-            <Grid item xs={12} sm={6} md={3}>
+            <Grid>
               <Box 
                 sx={{ 
                   display: 'flex', 
@@ -81,7 +81,7 @@ const About = () => {
               </Box>
             </Grid>
 
-            <Grid item xs={12} sm={6} md={3}>
+            <Grid>
               <Box 
                 sx={{ 
                   display: 'flex', 
@@ -113,7 +113,7 @@ const About = () => {
               </Box>
             </Grid>
 
-            <Grid item xs={12} sm={6} md={3}>
+            <Grid>
               <Box 
                 sx={{ 
                   display: 'flex', 
@@ -145,7 +145,7 @@ const About = () => {
               </Box>
             </Grid>
 
-            <Grid item xs={12} sm={6} md={3}>
+            <Grid>
               <Box 
                 sx={{ 
                   display: 'flex', 
@@ -191,7 +191,7 @@ const About = () => {
           </Typography>
 
           <Grid container spacing={isMobile ? 1 : 2}>
-            <Grid item xs={12} sm={6}>
+            <Grid>
               <Typography 
                 variant={isMobile ? 'subtitle2' : 'subtitle1'}
                 sx={{ fontWeight: 500 }}
@@ -211,7 +211,7 @@ const About = () => {
               </Typography>
             </Grid>
 
-            <Grid item xs={12} sm={6}>
+            <Grid>
               <Typography 
                 variant={isMobile ? 'subtitle2' : 'subtitle1'}
                 sx={{ fontWeight: 500 }}

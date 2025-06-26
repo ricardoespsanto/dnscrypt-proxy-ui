@@ -384,20 +384,20 @@ const Settings = () => {
           <Grid container spacing={isMobile ? 2 : 3}>
             {Object.entries(SETTINGS).map(([section, { label, fields }]) => (
               <React.Fragment key={section}>
-                <Grid item xs={12}>
-                  <Typography 
-                    variant={isMobile ? 'subtitle1' : 'h6'} 
-                    gutterBottom
-                    sx={{ fontWeight: 500 }}
-                  >
+            <Grid>
+              <Typography 
+                variant={isMobile ? 'subtitle1' : 'h6'} 
+                gutterBottom
+                sx={{ fontWeight: 500 }}
+              >
                     {label}
-                  </Typography>
-                  <Divider sx={{ mb: 2 }} />
-                </Grid>
+              </Typography>
+              <Divider sx={{ mb: 2 }} />
+            </Grid>
                 {Object.entries(fields).map(([field, config]) => (
-                  <Grid item xs={12} md={6} key={field}>
+                  <Grid key={field}>
                     {renderField(section, field, config)}
-                  </Grid>
+            </Grid>
                 ))}
               </React.Fragment>
             ))}

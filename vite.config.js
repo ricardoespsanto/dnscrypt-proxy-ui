@@ -22,6 +22,10 @@ export default defineConfig({
       overlay: false
     }
   },
+  css: {
+    postcss: './postcss.config.js',
+    devSourcemap: true
+  },
   build: {
     outDir: 'dist',
     assetsDir: 'assets',
@@ -67,8 +71,5 @@ export default defineConfig({
       VITE_LOG_DIR: JSON.stringify(path.join(__dirname, 'logs')),
     },
     global: 'globalThis'
-  },
-  css: {
-    devSourcemap: false
   }
 })

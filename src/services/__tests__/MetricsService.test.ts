@@ -1,4 +1,4 @@
-import MetricsService from '../MetricsService.js';
+import MetricsService from '../MetricsService.ts';
 import { exec } from 'child_process';
 import os from 'os';
 

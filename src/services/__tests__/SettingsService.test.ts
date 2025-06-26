@@ -1,9 +1,9 @@
-import SettingsService from '../SettingsService.js';
-import FileSystemService from '../FileSystemService.js';
-import { createError } from '../../utils/error.js';
+import SettingsService from '../SettingsService.ts';
+import FileSystemService from '../FileSystemService.ts';
+import { createError } from '../../utils/error.ts';
 
 // Mock FileSystemService
-jest.mock('../FileSystemService.js');
+jest.mock('../FileSystemService.ts');
 
 describe('SettingsService', () => {
   beforeEach(() => {

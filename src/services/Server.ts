@@ -1,16 +1,16 @@
 import express from 'express';
 import cors from 'cors';
-import { config } from '../config/index.js';
-import { validateSettings, validateBlocklists } from '../middleware/validation.js';
-import { apiLimiter, securityMiddleware } from '../middleware/security.js';
-import { formatResponse } from '../utils/response.js';
-import { createError, logger, errorHandler } from '../utils/error.js';
-import SettingsService from './SettingsService.js';
-import MetricsService from './MetricsService.js';
-import FileSystemService from './FileSystemService.js';
+import { config } from '../config/index.ts';
+import { validateSettings, validateBlocklists } from '../middleware/validation.ts';
+import { apiLimiter, securityMiddleware } from '../middleware/security.ts';
+import { formatResponse } from '../utils/response.ts';
+import { createError, logger, errorHandler } from '../utils/error.ts';
+import SettingsService from './SettingsService.ts';
+import MetricsService from './MetricsService.ts';
+import FileSystemService from './FileSystemService.ts';
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import LogService from './LogService.js';
+import LogService from './LogService.ts';
 
 const execAsync = promisify(exec);
 

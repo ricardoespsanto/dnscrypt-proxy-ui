@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { blocklistsApi } from '../services/api';
+import { blocklistsApi } from '../services/api.ts';
 import {
   Box,
   Card,

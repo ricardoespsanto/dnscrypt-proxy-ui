@@ -16,7 +16,7 @@ import {
   Speed as SpeedIcon,
   Dns as DnsIcon,
 } from '@mui/icons-material';
-import { metricsApi } from '../services/api';
+import { metricsApi } from '../services/api.ts';
 
 const Dashboard = () => {
   const theme = useTheme();

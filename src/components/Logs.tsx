@@ -20,7 +20,7 @@ import {
   Tooltip,
 } from '@mui/material';
 import { Refresh as RefreshIcon } from '@mui/icons-material';
-import { logsApi } from '../services/api';
+import { logsApi } from '../services/api.ts';
 
 // Define log levels and their properties
 const LOG_LEVELS = {

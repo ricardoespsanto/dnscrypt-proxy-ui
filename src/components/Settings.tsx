@@ -24,7 +24,7 @@ import {
   Tooltip,
 } from '@mui/material';
 import { Save as SaveIcon, Refresh as RefreshIcon } from '@mui/icons-material';
-import { settingsApi, resolversApi } from '../services/api';
+import { settingsApi, resolversApi } from '../services/api.ts';
 import { DEFAULT_SETTINGS, LOG_LEVELS } from '../config/defaults';
 
 // Define a single source of truth for settings

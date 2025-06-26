@@ -1,13 +1,13 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import { ThemeProvider, createTheme, Box, CssBaseline } from '@mui/material'
-import Sidebar from './components/Sidebar'
-import Dashboard from './components/Dashboard'
-import Resolvers from './components/Resolvers'
-import Logs from './components/Logs'
-import Settings from './components/Settings'
-import About from './components/About'
-import Blocklists from './components/Blocklists'
-import ServiceManager from './components/ServiceManager'
+import Sidebar from './components/Sidebar.tsx'
+import Dashboard from './components/Dashboard.tsx'
+import Resolvers from './components/Resolvers.tsx'
+import Logs from './components/Logs.tsx'
+import Settings from './components/Settings.tsx'
+import About from './components/About.tsx'
+import Blocklists from './components/Blocklists.tsx'
+import ServiceManager from './components/ServiceManager.tsx'
 
 const theme = createTheme({
   palette: {

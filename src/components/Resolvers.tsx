@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { resolversApi } from '../services/api';
+import { resolversApi } from '../services/api.ts';
 import {
   Box,
   Card,

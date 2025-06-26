@@ -3,10 +3,10 @@
   "version": "1.0.0",
   "description": "A modern web interface for DNSCrypt-Proxy",
   "type": "module",
-  "main": "src/services/Server.js",
+  "main": "src/services/Server.ts",
   "scripts": {
     "start": "concurrently \"npm run server\" \"npm run client\"",
-    "server": "node src/services/Server.js",
+    "server": "node src/services/Server.ts",
     "client": "vite",
     "dev": "concurrently \"npm run server\" \"npm run client\"",
     "test": "jest",

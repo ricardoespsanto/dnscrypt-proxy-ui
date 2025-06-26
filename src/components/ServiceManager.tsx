@@ -18,7 +18,7 @@ import {
   Refresh as RestartIcon,
   Settings as ConfigIcon,
 } from '@mui/icons-material';
-import { serviceApi } from '../services/api';
+import { serviceApi } from '../services/api.ts';
 
 const ServiceManager = () => {
   const [status, setStatus] = useState('unknown');

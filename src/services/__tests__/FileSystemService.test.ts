@@ -1,4 +1,4 @@
-import FileSystemService from '../FileSystemService.js';
+import FileSystemService from '../FileSystemService.ts';
 import fs from 'fs/promises';
 import path from 'path';
 

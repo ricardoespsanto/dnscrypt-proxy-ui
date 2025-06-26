@@ -1,12 +1,12 @@
 export default {
   testEnvironment: 'node',
   transform: {
-    '^.+\\.js$': 'babel-jest'
+    '^.+\.(js|jsx|ts|tsx)$' : 'babel-jest'
   },
   moduleNameMapper: {
-    '^(\\.{1,2}/.*)\\.js$': '$1'
+    '^(\.{1,2}/.*)\.js$': '$1'
   },
-  testMatch: ['**/__tests__/**/*.js', '**/?(*.)+(spec|test).js'],
+  testMatch: ['**/__tests__/**/*.ts', '**/?(*.)+(spec|test).ts', '**/__tests__/**/*.tsx', '**/?(*.)+(spec|test).tsx'],
   collectCoverage: true,
   coverageDirectory: 'coverage',
   coverageReporters: ['text', 'lcov'],
@@ -18,4 +18,4 @@ export default {
       statements: 80
     }
   }
-}; 
+};

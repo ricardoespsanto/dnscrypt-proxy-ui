@@ -13,7 +13,17 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "build:css": "tailwindcss -i ./src/index.css -o ./src/output.css --watch",
-    "build": "vite build"
+    "build": "vite build",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "*.{js,jsx}": [
+      "npx eslint --fix",
+      "npx prettier --write"
+    ],
+    "*.{css,md}": [
+      "npx prettier --write"
+    ]
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",

@@ -1,4 +1,5 @@
-import { Request, Response, NextFunction } from 'express';
+import pkg from 'express';
+const { Request, Response, NextFunction } = pkg;
 import { createError } from '../utils/error.ts';
 
 export const validateSettings = (req: Request, res: Response, next: NextFunction): void => {

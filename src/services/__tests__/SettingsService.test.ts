@@ -39,10 +39,9 @@ describe('SettingsService', () => {
 
   describe('save', () => {
     it('should save settings to config file', async () => {
-      const settings = {
-        listen_addresses: ['127.0.0.1:53'],
-        max_clients: 250
-      };
+      const settings = SettingsService.getDefaultSettings();
+      settings.listen_addresses = ['127.0.0.1:53'];
+      settings.max_clients = 250;
 
       (FileSystemService.writeFile as jest.Mock).mockResolvedValue(true);
       await SettingsService.save(settings);
@@ -51,10 +50,9 @@ describe('SettingsService', () => {
     });
 
     it('should handle save errors', async () => {
-      const settings = {
-        listen_addresses: ['127.0.0.1:53'],
-        max_clients: 250
-      };
+      const settings = SettingsService.getDefaultSettings();
+      settings.listen_addresses = ['127.0.0.1:53'];
+      settings.max_clients = 250;
 
       (FileSystemService.writeFile as jest.Mock).mockRejectedValue(new Error('Write error'));
       await expect(SettingsService.save(settings)).rejects.toThrow('Failed to save settings');

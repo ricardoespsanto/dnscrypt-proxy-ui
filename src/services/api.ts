@@ -1,55 +1,36 @@
-import axios from 'axios';
-import { API_CONFIG } from '../config/defaults.ts';
+import axios, { AxiosError, AxiosResponse } from 'axios';
 
-// Create axios instance with default config
 const api = axios.create({
-  baseURL: API_CONFIG.BASE_URL,
-  timeout: API_CONFIG.TIMEOUT,
+  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:3000/api',
+  timeout: 10000, // 10 seconds
   headers: {
     'Content-Type': 'application/json',
   },
-  withCredentials: true
 });
+
+// Add a response interceptor to handle errors
+api.interceptors.response.use(
+  (response: AxiosResponse) => response,
+  (error: AxiosError) => {
+    if (error.response) {
+      console.error('API Error:', error.response.data);
+      return Promise.reject(error.response.data);
+    } else if (error.request) {
+      console.error('Network Error:', error.request);
+      return Promise.reject({ message: 'Network Error: No response from server' });
+    } else {
+      console.error('Error:', error.message);
+      return Promise.reject(error);
+    }
+  }
+);
 
 // Request interceptor
 api.interceptors.request.use(
   (config) => {
-    // You can add auth tokens or other headers here
     return config;
   },
   (error) => {
-    return Promise.reject(error);
-  }
-);
-
-// Response interceptor
-api.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    const { response } = error;
-    // Handle different error scenarios
-    if (response) {
-      switch (response.status) {
-        case 401:
-          // Handle unauthorized
-          break;
-        case 403:
-          // Handle forbidden
-          break;
-        case 404:
-          // Handle not found
-          break;
-        case 500:
-          // Handle server error
-          break;
-        default:
-          // Handle other errors
-          break;
-      }
-    }
-    if (error.response?.status === 429) {
-      console.error('Rate limit exceeded. Please try again later.');
-    }
     return Promise.reject(error);
   }
 );
@@ -60,20 +41,22 @@ const endpoints = {
   settings: '/settings',
   resolvers: '/resolvers',
   blocklists: '/blocklists',
+  metrics: '/metrics',
+  service: '/service',
 };
 
 // Log related API calls
 export const logsApi = {
   fetch: async (): Promise<any> => {
-    const response = await axios.get('/api/logs');
+    const response = await api.get(endpoints.logs);
     return response.data;
   },
   getLogs: async (limit: number): Promise<any> => {
-    const response = await axios.get(`/api/logs?limit=${limit}`);
+    const response = await api.get(`${endpoints.logs}?limit=${limit}`);
     return response.data;
   },
   clear: async (): Promise<any> => {
-    const response = await axios.delete('/api/logs');
+    const response = await api.delete(endpoints.logs);
     return response.data;
   },
   getLevels: () => ['emerg', 'alert', 'crit', 'error', 'warn', 'notice', 'info', 'debug'],
@@ -130,22 +113,15 @@ export const blocklistsApi = {
   fetch: async (type: string = 'blacklist'): Promise<any> => {
     try {
       const response = await api.get(`${endpoints.blocklists}?type=${type}`);
-      
-      // Validate response data
       if (!response.data || typeof response.data !== 'object') {
         throw new Error(`Invalid response format for ${type}`);
       }
-      
-      // Ensure blocklists is an array
       if (!Array.isArray(response.data.blocklists)) {
         response.data.blocklists = [];
       }
-      
-      // Ensure whitelist is an array
       if (!Array.isArray(response.data.whitelist)) {
         response.data.whitelist = [];
       }
-      
       return response.data;
     } catch (error: unknown) {
       console.error(`Error fetching ${type}:`, error);
@@ -156,22 +132,16 @@ export const blocklistsApi = {
   save: async (data: { blocklists: string[]; type: string }): Promise<any> => {
     try {
       const { blocklists, type = 'blacklist' } = data;
-      
-      // Validate input data
       if (!Array.isArray(blocklists)) {
         throw new Error('blocklists must be an array');
       }
       if (!type || !['blacklist', 'whitelist'].includes(type)) {
         throw new Error('Invalid type specified');
       }
-      
       const response = await api.post(endpoints.blocklists, { blocklists, type });
-      
-      // Validate response
       if (!response.data || typeof response.data !== 'object') {
         throw new Error('Invalid response format');
       }
-      
       return response.data;
     } catch (error: unknown) {
       console.error('Error saving blocklists:', error);
@@ -184,7 +154,7 @@ export const blocklistsApi = {
 export const metricsApi = {
   fetch: async (): Promise<any> => {
     try {
-      const response = await api.get('/metrics');
+      const response = await api.get(endpoints.metrics);
       return response.data;
     } catch (error: unknown) {
       console.error('Error fetching metrics:', error);
@@ -196,27 +166,18 @@ export const metricsApi = {
 // Add service control API
 export const serviceApi = {
   getStatus: async (): Promise<any> => {
-    const response = await fetch(`${API_CONFIG.BASE_URL}/service/status`);
-    if (!response.ok) throw new Error('Failed to get service status');
-    return response.json();
+    const response = await api.get(`${endpoints.service}/status`);
+    return response.data;
   },
 
   control: async (action: string): Promise<any> => {
-    const response = await fetch(`${API_CONFIG.BASE_URL}/service`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ action }),
-    });
-    if (!response.ok) throw new Error(`Failed to ${action} service`);
-    return response.json();
+    const response = await api.post(endpoints.service, { action });
+    return response.data;
   },
 
   getMetrics: async (): Promise<any> => {
-    const response = await fetch(`${API_CONFIG.BASE_URL}/service/metrics`);
-    if (!response.ok) throw new Error('Failed to get service metrics');
-    return response.json();
+    const response = await api.get(`${endpoints.service}/metrics`);
+    return response.data;
   },
 };
 
@@ -228,4 +189,4 @@ export default {
   blocklists: blocklistsApi,
   metrics: metricsApi,
   service: serviceApi,
-}; 
+};

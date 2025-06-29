@@ -1,10 +1,6 @@
 import winston from 'winston';
-import { Request, Response, NextFunction } from 'express';
-
-interface CustomError extends Error {
-  status?: number;
-  details?: any;
-}
+import pkg from 'express';
+const { Request, Response, NextFunction } = pkg;
 
 // Create logger instance
 export const logger = winston.createLogger({
@@ -31,22 +27,23 @@ export const logger = winston.createLogger({
 });
 
 // Create error object with consistent format
-export const createError = (message: string, status: number = 500, details: any = null): object => {
-  const error: { success: boolean; error: string; timestamp: string; details?: any; status?: number } = {
-    success: false,
-    error: message,
-    timestamp: new Date().toISOString()
-  };
+export class CustomError extends Error {
+  status: number;
+  details: any;
 
-  if (details) {
-    error.details = details;
+  constructor(message: string, status: number = 500, details: any = null) {
+    super(message);
+    this.name = 'CustomError';
+    this.status = status;
+    this.details = details;
+
+    // Set the prototype explicitly.
+    Object.setPrototypeOf(this, CustomError.prototype);
   }
+}
 
-  if (status) {
-    error.status = status;
-  }
-
-  return error;
+export const createError = (message: string, status: number = 500, details: any = null): CustomError => {
+  return new CustomError(message, status, details);
 };
 
 // Error handler middleware

@@ -1,6 +1,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { createError } from '../utils/error.ts';
+import { Stats } from 'fs';
 
 class FileSystemService {
   static async exists(filePath: string): Promise<boolean> {
@@ -52,6 +53,28 @@ class FileSystemService {
         throw createError('File not found', 404, error);
       }
       throw createError('Failed to delete file', 500, error);
+    }
+  }
+
+  static async readDir(dirPath: string): Promise<string[]> {
+    try {
+      return await fs.readdir(dirPath);
+    } catch (error: any) {
+      if (error.code === 'ENOENT') {
+        throw createError('Directory not found', 404, error);
+      }
+      throw createError('Failed to read directory', 500, error);
+    }
+  }
+
+  static async getStats(filePath: string): Promise<Stats> {
+    try {
+      return await fs.stat(filePath);
+    } catch (error: any) {
+      if (error.code === 'ENOENT') {
+        throw createError('File not found', 404, error);
+      }
+      throw createError('Failed to get file stats', 500, error);
     }
   }
 }

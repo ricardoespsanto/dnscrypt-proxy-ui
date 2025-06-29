@@ -1,4 +1,5 @@
-import { Request, Response, NextFunction } from 'express';
+import pkg from 'express';
+const { Request, Response, NextFunction } = pkg;
 import rateLimit from 'express-rate-limit';
 import helmet from 'helmet';
 

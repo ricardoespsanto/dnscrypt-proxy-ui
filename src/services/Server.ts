@@ -135,7 +135,11 @@ app.post('/api/blocklists', validateBlocklists, async (req: express.Request, res
 // Metrics endpoint
 app.get('/api/metrics', async (req: express.Request, res: express.Response) => {
   try {
-    const metrics = await MetricsService.collect();
+    const [logMetrics, systemMetrics] = await Promise.all([
+      MetricsService.collect(),
+      MetricsService.getSystemMetrics(),
+    ]);
+    const metrics = { ...logMetrics, ...systemMetrics };
     return res.json(formatResponse(metrics));
   } catch (error: unknown) {
     logger.error('Error fetching metrics', error);

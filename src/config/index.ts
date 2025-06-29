@@ -1,9 +1,6 @@
 import path from 'path';
 import { fileURLToPath } from 'url';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
 interface CorsConfig {
   origin: boolean | string | string[];
   methods: string[];
@@ -58,7 +55,7 @@ export const config: AppConfig = {
     port: process.env.PORT ? parseInt(process.env.PORT, 10) : 3000,
     timeout: 30000, // 30 seconds
     cors: {
-      origin: true, // Allow all origins in development
+      origin: ['http://localhost:5173', 'http://127.0.0.1:5173'], // Explicitly allow client origins
       methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
       allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
       exposedHeaders: ['Content-Length', 'X-Requested-With'],
@@ -69,8 +66,8 @@ export const config: AppConfig = {
     }
   },
   paths: {
-    log: import.meta.env.VITE_LOG_PATH || path.join(__dirname, '../../logs/dnscrypt-proxy.log'),
-    config: import.meta.env.VITE_CONFIG_PATH || path.join(__dirname, '../../config/dnscrypt-proxy.toml')
+    log: path.join(path.dirname(fileURLToPath(import.meta.url)), '../../logs/dnscrypt-proxy.log'),
+    config: path.join(path.dirname(fileURLToPath(import.meta.url)), '../../config/dnscrypt-proxy.toml')
   },
   metrics: {
     logLinesToProcess: 1000,

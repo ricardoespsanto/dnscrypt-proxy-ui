@@ -610,8 +610,8 @@ const Resolvers = () => {
       const bLatency = parseInt(b.latency) || 0;
       return sortConfig.direction === 'asc' ? aLatency - bLatency : bLatency - aLatency;
     }
-    const aValue = a[sortConfig.key]?.toLowerCase() || '';
-    const bValue = b[sortConfig.key]?.toLowerCase() || '';
+    const aValue = a[sortConfig.key]?.toString().toLowerCase() || '';
+    const bValue = b[sortConfig.key]?.toString().toLowerCase() || '';
     return sortConfig.direction === 'asc' 
       ? aValue.localeCompare(bValue)
       : bValue.localeCompare(aValue);
@@ -631,7 +631,7 @@ const Resolvers = () => {
     setPage(0);
   };
 
-  const handleSort = (key: keyof Resolver | 'latency'): void => {
+  const handleSort = (key: keyof Resolver): void => {
     setSortConfig(prev => ({
       key,
       direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc'

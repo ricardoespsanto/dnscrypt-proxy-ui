@@ -15,6 +15,8 @@ interface Metrics {
   serviceStatus: string;
   lastError: string | null;
   uptime: number;
+  cpuUsage: string;
+  activeConnections: number;
 }
 
 class MetricsService {
@@ -30,7 +32,9 @@ class MetricsService {
         currentResolver: '',
         serviceStatus: 'active',
         lastError: null,
-        uptime: 0
+        uptime: 0,
+        cpuUsage: "0%",
+        activeConnections: 0
       };
 
 
@@ -90,22 +94,17 @@ class MetricsService {
   }
 
   static async getSystemMetrics(): Promise<{ uptime: string; memoryUsage: string; cpuUsage: string; activeConnections: number }> {
-    try {
-      const [uptime, memory, cpu] = await Promise.all([
-        this.getUptime(),
-        this.getMemoryUsage(),
-        this.getCpuUsage(),
-      ]);
+    const uptime = await this.getUptime().catch(e => { console.error(e); return 'N/A'; });
+    const memory = this.getMemoryUsage(); // This one is synchronous and less likely to fail
+    const cpu = await this.getCpuUsage().catch(e => { console.error(e); return 'N/A'; });
+    const activeConnections = await this.getActiveConnections().catch(e => { console.error(e); return 0; });
 
-      return {
-        uptime,
-        memoryUsage: memory,
-        cpuUsage: cpu,
-        activeConnections: await this.getActiveConnections(),
-      };
-    } catch (error) {
-      throw createError('Failed to get system metrics', 500, error);
-    }
+    return {
+      uptime,
+      memoryUsage: memory,
+      cpuUsage: cpu,
+      activeConnections,
+    };
   }
 
   static async getUptime(): Promise<string> {

@@ -5,6 +5,7 @@ import FileSystemService from './FileSystemService.ts';
 import { createError } from '../utils/error.ts';
 
 interface Settings {
+  [key: string]: any;
   listen_addresses: string[];
   max_clients: number;
   ipv4_servers: boolean;
@@ -44,14 +45,19 @@ class SettingsService {
       }
 
       const content = await FileSystemService.readFile(config.paths.config);
-      const settings: Settings = TOML.parse(content);
+      const parsedContent = TOML.parse(content) as Partial<Settings>;
+      const settings: Settings = {
+        ...this.getDefaultSettings(), // Start with default settings to ensure all properties are present
+        ...parsedContent,
+      };
       
-      // Ensure blocklists and whitelist are arrays
+      // Ensure blocklists is an array
       if (!Array.isArray(settings.blocklists)) {
         settings.blocklists = [];
       }
-      if (!Array.isArray(settings.whitelist)) {
-        settings.whitelist = [];
+      // Ensure whitelist is a string
+      if (typeof settings.whitelist !== 'string') {
+        settings.whitelist = '';
       }
 
       return settings;

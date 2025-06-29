@@ -21,7 +21,7 @@ describe('MetricsService', () => {
   describe('collect', () => {
     it('should collect all metrics', async () => {
       // Mock exec responses
-      (exec as jest.Mock).mockImplementation((cmd: string, callback: (error: Error | null, result: { stdout: string }) => void) => {
+      (exec as unknown as jest.Mock).mockImplementation((cmd: string, callback: (error: Error | null, result: { stdout: string }) => void) => {
         if (cmd.includes('uptime')) {
           callback(null, { stdout: 'up 2 hours, 30 minutes' });
         } else if (cmd.includes('top')) {
@@ -45,8 +45,8 @@ describe('MetricsService', () => {
     });
 
     it('should handle errors gracefully', async () => {
-      (exec as jest.Mock).mockImplementation((cmd: string, callback: (error: Error | null, result: { stdout: string }) => void) => {
-        callback(new Error('Command failed'));
+      (exec as unknown as jest.Mock).mockImplementation((cmd: string, callback: (error: Error | null, result: { stdout: string }) => void) => {
+        callback(new Error('Command failed'), { stdout: '' });
       });
 
       const metrics = await MetricsService.collect();

@@ -12,13 +12,13 @@ describe('FileSystemService', () => {
 
   describe('exists', () => {
     it('should return true when file exists', async () => {
-      (fs.access as jest.Mock).mockResolvedValue();
+      (fs.access as jest.Mock).mockResolvedValue(undefined);
       const result = await FileSystemService.exists('/path/to/file');
       expect(result).toBe(true);
     });
 
     it('should return false when file does not exist', async () => {
-      (fs.access as jest.Mock).mockRejectedValue(new Error('File not found'));
+      (fs.access as jest.Mock).mockRejectedValue({ code: 'ENOENT' });
       const result = await FileSystemService.exists('/path/to/file');
       expect(result).toBe(false);
     });
@@ -32,7 +32,7 @@ describe('FileSystemService', () => {
     });
 
     it('should handle errors', async () => {
-      (fs.mkdir as jest.Mock).mockRejectedValue(new Error('Permission denied'));
+      (fs.mkdir as jest.Mock).mockRejectedValue(new Error('Failed to create directory'));
       await expect(FileSystemService.ensureDirectory('/path/to/dir'))
         .rejects.toThrow('Failed to create directory');
     });
@@ -137,9 +137,9 @@ describe('FileSystemService', () => {
     });
 
     it('should handle other errors', async () => {
-      (fs.stat as jest.Mock).mockRejectedValue(new Error('Stat error'));
+      (fs.stat as jest.Mock).mockRejectedValue(new Error('Failed to get file stats'));
       await expect(FileSystemService.getStats('/path/to/file'))
         .rejects.toThrow('Failed to get file stats');
     });
   });
-}); 
+});
